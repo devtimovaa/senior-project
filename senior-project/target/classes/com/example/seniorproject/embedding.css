@@ -1,0 +1,54 @@
+.embedding-root {
+    -fx-background-color: linear-gradient(to bottom, #ffffff, #eef2ff);
+}
+
+.base-card {
+    -fx-background-color: #f3f7ff;
+    -fx-border-color: #8bb3ff;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+}
+
+.secret-card {
+    -fx-background-color: #fff3f7;
+    -fx-border-color: #ff9bb8;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+}
+
+.row-card {
+    -fx-background-color: #f7fff3;
+    -fx-border-color: #9ad179;
+    -fx-border-radius: 8;
+    -fx-background-radius: 8;
+}
+
+.section-title {
+    -fx-font-size: 16px;
+    -fx-font-weight: bold;
+    -fx-text-fill: #2b2b2b;
+}
+
+.section-subtitle {
+    -fx-font-size: 13px;
+    -fx-font-weight: 600;
+    -fx-text-fill: #2b2b2b;
+}
+
+.rounded-control {
+    -fx-background-radius: 6;
+}
+
+.primary-button {
+    -fx-background-color: #4f7cff;
+    -fx-text-fill: white;
+    -fx-background-radius: 6;
+    -fx-font-weight: bold;
+}
+
+.success-button {
+    -fx-background-color: #2fbf71;
+    -fx-text-fill: white;
+    -fx-background-radius: 6;
+    -fx-font-weight: bold;
+}
