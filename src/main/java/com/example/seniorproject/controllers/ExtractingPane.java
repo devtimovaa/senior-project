@@ -3,6 +3,7 @@ package com.example.seniorproject.controllers;
 import com.example.seniorproject.algorithms.LSBSteganography;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
@@ -57,7 +58,7 @@ public class ExtractingPane {
                 Bindings.isNull(imageView.imageProperty()));
         submitButton.setOnAction(event -> handleSubmit());
 
-        //image selection and default/chosen image
+        // image selection and default/chosen image
         Label imageLabel = new Label("Image to Extract From");
         Button chooseButton = new Button("Choose image");
         chooseButton.setOnAction(event -> openImageChooser());
@@ -74,10 +75,10 @@ public class ExtractingPane {
         topRight.setPrefWidth(450);
         topRight.setAlignment(Pos.CENTER);
 
-        //first row - left (image to extract from + default/loaded image), right (algorithm + submit)
+        //First row - left (image to extract from + default/loaded image), right (algorithm + submit)
         HBox row1 = new HBox(10, leftColumn, topRight);
 
-        //second row - left (original Image), right (extracted secret and text area)
+        //Second row - left (original Image), right (extracted secret and text area)
         Label originalImageLabel = new Label("Original Image");
         VBox row2Left = new VBox(10, originalImageLabel, resultImageView);
         row2Left.setPadding(new Insets(10));
@@ -138,8 +139,8 @@ public class ExtractingPane {
 
         try {
             BufferedImage buffered = SwingFXUtils.fromFXImage(image, null);
-            String extracted = SelectedAlgorithm(buffered);
-            resultImageView.setImage(image); //show original image
+            String extracted = extractWithSelectedAlgorithm(buffered);
+            resultImageView.setImage(image); // show original image used for extraction
             extractedTextArea.setText(extracted == null ? "" : extracted);
 
             if (extracted == null || extracted.isEmpty()) {
@@ -151,10 +152,11 @@ public class ExtractingPane {
         }
     }
 
-    private String SelectedAlgorithm(BufferedImage buffered) {
+    private String extractWithSelectedAlgorithm(BufferedImage buffered) {
         String selection = algorithmChoice.getSelectionModel().getSelectedItem();
         if ("LSB".equals(selection)) {
-            return new LSBSteganography().extract(buffered);
+            byte[] raw = new LSBSteganography().extract(buffered);
+            return raw.length == 0 ? "" : new String(raw, StandardCharsets.UTF_8);
         }
         if ("Randomized LSB".equals(selection)) {
             return "";

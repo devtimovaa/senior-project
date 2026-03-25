@@ -3,6 +3,7 @@ import com.example.seniorproject.algorithms.LSBSteganography;
 
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 import javax.imageio.ImageIO;
 import javafx.embed.swing.SwingFXUtils;
@@ -69,7 +70,7 @@ public class EmbeddingPane {
         algorithmChoice = new ChoiceBox<>(FXCollections.observableArrayList("LSB", "Randomized LSB", "DCT"));
         algorithmChoice.getSelectionModel().selectFirst();
         submitButton = new Button("Submit");
-        submitButton.setOnAction(event -> clickSubmit());
+        submitButton.setOnAction(event -> handleSubmit());
         statusLabel = new Label("");
         HBox row2 = new HBox(10, algorithmLabel, algorithmChoice, submitButton, statusLabel);
         row2.setPadding(new Insets(10));
@@ -119,7 +120,7 @@ public class EmbeddingPane {
     }
 
    //submit button
-    private void clickSubmit() {
+    private void handleSubmit() {
         Window window = root.getScene() != null ? root.getScene().getWindow() : null;
         if (window == null) {
             statusLabel.setText("Error: no window.");
@@ -151,7 +152,7 @@ public class EmbeddingPane {
             }
             String algorithm = algorithmChoice.getSelectionModel().getSelectedItem();
             if ("LSB".equals(algorithm)) {
-                buffered = new LSBSteganography().embed(buffered, secret);
+                buffered = new LSBSteganography().embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
             }
             //output
             String path = outputFile.getAbsolutePath().toLowerCase();
