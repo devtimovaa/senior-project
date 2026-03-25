@@ -1,99 +1,77 @@
 package com.example.seniorproject.algorithms;
 
 import java.awt.image.BufferedImage;
+import java.util.Arrays;
+
+import static com.example.seniorproject.algorithms.LSBMethods.readByteFromPixels;
+import static com.example.seniorproject.algorithms.LSBMethods.storeByteInPixels;
 
 public class LSBSteganography implements SteganographyAlgorithm {
 
-    private static final int HEADER_BYTES = 4;
+    private static final int HEADER_BYTES   = 4;
+    private static final int CHECKSUM_BYTES = 1;
 
     @Override
-    public BufferedImage embed(BufferedImage base, byte[] secret) {
-        byte[] msg = secret == null ? new byte[0] : secret;
-        byte[] payload = withLengthHeader(msg);
+    public BufferedImage embed(BufferedImage base, byte[] data) {
+        byte[] payload = data == null ? new byte[0] : data;
+
+        int bitsNeeded    = (HEADER_BYTES + payload.length + CHECKSUM_BYTES) * 8;
+        int bitsAvailable = base.getWidth() * base.getHeight() * 3;
+        if (bitsNeeded > bitsAvailable) {
+            throw new IllegalArgumentException(
+                    "Image too small: need " + bitsNeeded + " bits, have " + bitsAvailable);
+        }
+
         int w = base.getWidth();
         int h = base.getHeight();
-        int[] pixels = base.getRGB(0, 0, w, h, null, 0, w);
+        BufferedImage copy = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        copy.setRGB(0, 0, w, h, base.getRGB(0, 0, w, h, null, 0, w), 0, w);
 
-        int bitsNeeded = payload.length * 8;
-        if (bitsNeeded > pixels.length * 3) {
-            throw new IllegalArgumentException(
-                    "Image too small: need " + bitsNeeded + " bits, have " + pixels.length * 3);
+        storeByteInPixels((byte) ((payload.length >> 24) & 0xFF), 0, copy);
+        storeByteInPixels((byte) ((payload.length >> 16) & 0xFF), 1, copy);
+        storeByteInPixels((byte) ((payload.length >>  8) & 0xFF), 2, copy);
+        storeByteInPixels((byte)  (payload.length        & 0xFF), 3, copy);
+
+        for (int i = 0; i < payload.length; i++) {
+            storeByteInPixels(payload[i], HEADER_BYTES + i, copy);
         }
 
-        int bitIndex = 0;
-        for (int i = 0; i < pixels.length && bitIndex < bitsNeeded; i++) {
-            int a = (pixels[i] >> 24) & 0xFF;
-            int r = (pixels[i] >> 16) & 0xFF;
-            int g = (pixels[i] >> 8) & 0xFF;
-            int b = pixels[i] & 0xFF;
+        storeByteInPixels((byte) Arrays.hashCode(payload), HEADER_BYTES + payload.length, copy);
 
-            r = (r & 0xFE) | bitAt(payload, bitIndex++);
-            if (bitIndex < bitsNeeded) g = (g & 0xFE) | bitAt(payload, bitIndex++);
-            if (bitIndex < bitsNeeded) b = (b & 0xFE) | bitAt(payload, bitIndex++);
-
-            pixels[i] = (a << 24) | (r << 16) | (g << 8) | b;
-        }
-
-        BufferedImage result = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        result.setRGB(0, 0, w, h, pixels, 0, w);
-        return result;
+        return copy;
     }
 
     @Override
     public byte[] extract(BufferedImage base) {
-        int w = base.getWidth();
-        int h = base.getHeight();
-        int[] pixels = base.getRGB(0, 0, w, h, null, 0, w);
-
-        byte[] header = readBytes(pixels, HEADER_BYTES, 0);
-        int len = (header[0] & 0xFF) << 24 | (header[1] & 0xFF) << 16
-                | (header[2] & 0xFF) << 8 | (header[3] & 0xFF);
-
-        int maxMsg = (pixels.length * 3) / 8 - HEADER_BYTES;
-        if (len < 0 || len > maxMsg) {
-            return new byte[0];
+        int maxPayload = (base.getWidth() * base.getHeight() * 3) / 8
+                         - HEADER_BYTES - CHECKSUM_BYTES;
+        if (maxPayload < 0) {
+            throw new IllegalArgumentException("Image is too small to contain hidden data");
         }
 
-        return readBytes(pixels, len, HEADER_BYTES * 8);
-    }
+        byte b1 = readByteFromPixels(0, base);
+        byte b2 = readByteFromPixels(1, base);
+        byte b3 = readByteFromPixels(2, base);
+        byte b4 = readByteFromPixels(3, base);
+        int size = ((0xFF & b1) << 24) | ((0xFF & b2) << 16)
+                 | ((0xFF & b3) <<  8) |  (0xFF & b4);
 
-    private static byte[] withLengthHeader(byte[] msg) {
-        int len = msg.length;
-        byte[] out = new byte[HEADER_BYTES + len];
-        out[0] = (byte) (len >> 24);
-        out[1] = (byte) (len >> 16);
-        out[2] = (byte) (len >> 8);
-        out[3] = (byte) len;
-        System.arraycopy(msg, 0, out, HEADER_BYTES, len);
-        return out;
-    }
-
-    private static int bitAt(byte[] bytes, int index) {
-        int byteIndex = index / 8;
-        int bitInByte = 7 - (index % 8);
-        return (bytes[byteIndex] >> bitInByte) & 1;
-    }
-
-    private static byte[] readBytes(int[] pixels, int byteCount, int startBit) {
-        byte[] out = new byte[byteCount];
-        int outIndex = 0;
-        int bitPos = 0;
-        int current = 0;
-        int bitsSeen = 0;
-
-        for (int rgb : pixels) {
-            for (int c : new int[]{(rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF}) {
-                if (bitsSeen++ < startBit) continue;
-                current = (current << 1) | (c & 1);
-                bitPos++;
-                if (bitPos == 8) {
-                    out[outIndex++] = (byte) current;
-                    current = 0;
-                    bitPos = 0;
-                    if (outIndex >= byteCount) return out;
-                }
-            }
+        if (size < 0 || size > maxPayload) {
+            throw new IllegalStateException(
+                    "No valid hidden data found in this image (decoded length: " + size + ")");
         }
-        return outIndex == byteCount ? out : new byte[0];
+
+        byte[] result = new byte[size];
+        for (int i = 0; i < size; i++) {
+            result[i] = readByteFromPixels(HEADER_BYTES + i, base);
+        }
+
+        byte checksum       = (byte) Arrays.hashCode(result);
+        byte storedChecksum = readByteFromPixels(HEADER_BYTES + size, base);
+        if (checksum != storedChecksum) {
+            throw new RuntimeException("Checksum mismatch: data may be corrupted");
+        }
+
+        return result;
     }
 }
