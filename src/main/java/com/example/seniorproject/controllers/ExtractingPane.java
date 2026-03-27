@@ -1,11 +1,11 @@
 package com.example.seniorproject.controllers;
 
-import com.example.seniorproject.algorithms.LSBSteganography;
+import com.example.seniorproject.algorithms.LSBAlgorithm;
+import com.example.seniorproject.algorithms.RandomizedLSBAlgorithm;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Objects;
-import javafx.beans.binding.Bindings;
 import javafx.collections.FXCollections;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
@@ -16,6 +16,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
@@ -24,7 +25,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
-//pane for extracting a secret message from an image
+// Pane for extracting a secret message from an image
 public class ExtractingPane {
     private final VBox root; //root container
     private final ImageView imageView; //show the chosen/default image (top left)
@@ -32,33 +33,32 @@ public class ExtractingPane {
     private final TextArea extractedTextArea; //display the extracted secret (below right)
     private final Button submitButton;
     private final ChoiceBox<String> algorithmChoice;
+    private final TextField seedField;
 
     public Node getNode() {
         return root;
     }
 
-    //constructor for the UI
+    // Constructor for the UI
     public ExtractingPane() {
-        //load a default image to appear (top left)
+        // Load a default image to appear (top left)
         Image defaultImage = loadDefaultImage();
         imageView = createImageView(defaultImage);
-        resultImageView = createImageView(defaultImage); // default image until extraction is done
+        resultImageView = createImageView(defaultImage); 
 
         extractedTextArea = new TextArea();
         extractedTextArea.setEditable(false);
         extractedTextArea.setPromptText("Extracted message will appear here");
 
-        //algorithm choices
+        // Algorithm choices
         algorithmChoice = new ChoiceBox<>(
-                FXCollections.observableArrayList("LSB", "Randomized LSB", "DCT"));
+                FXCollections.observableArrayList("LSB", "Randomized LSB"));
         algorithmChoice.getSelectionModel().selectFirst();
 
         submitButton = new Button("Submit");
-        submitButton.disableProperty().bind(
-                Bindings.isNull(imageView.imageProperty()));
         submitButton.setOnAction(event -> handleSubmit());
 
-        // image selection and default/chosen image
+        // Image selection and default/chosen image
         Label imageLabel = new Label("Image to Extract From");
         Button chooseButton = new Button("Choose image");
         chooseButton.setOnAction(event -> openImageChooser());
@@ -66,11 +66,25 @@ public class ExtractingPane {
         leftColumn.setPadding(new Insets(10));
         leftColumn.setPrefWidth(350);
 
-        //algorithm choice and submit button (centered in right area)
+     
         Label algorithmLabel = new Label("Steganography Algorithm:");
         HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton);
         controlsRow.setAlignment(Pos.CENTER);
-        VBox topRight = new VBox(controlsRow);
+
+        Label seedLabel = new Label("Key:");
+        seedField = new TextField();
+        seedField.setPromptText("Enter an integer key");
+        VBox seedBox = new VBox(5, seedLabel, seedField);
+        seedBox.setVisible(false);
+        seedBox.setManaged(false);
+
+        algorithmChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            boolean isRandomized = "Randomized LSB".equals(newVal);
+            seedBox.setVisible(isRandomized);
+            seedBox.setManaged(isRandomized);
+        });
+
+        VBox topRight = new VBox(10, controlsRow, seedBox);
         topRight.setPadding(new Insets(10));
         topRight.setPrefWidth(450);
         topRight.setAlignment(Pos.CENTER);
@@ -95,7 +109,7 @@ public class ExtractingPane {
         root.setPadding(new Insets(10));
     }
 
-    //consistent image view
+    // Consistent image view
     private ImageView createImageView(Image image) {
         ImageView view = new ImageView(image);
         view.setFitWidth(300);
@@ -104,17 +118,16 @@ public class ExtractingPane {
         return view;
     }
 
-    //default image
+    // Default image
     private Image loadDefaultImage() {
-        try (InputStream stream = Objects.requireNonNull(
-                getClass().getResourceAsStream("/com/example/seniorproject/img.png"))) {
+        InputStream stream = getClass().getResourceAsStream("/com/example/seniorproject/img.png");
+        if (stream != null) {
             return new Image(stream);
-        } catch (Exception ex) {
-            return new WritableImage(1, 1);
         }
+        return new WritableImage(1, 1);
     }
 
-    //choose an image
+    //Choose an image
     private void openImageChooser() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.getExtensionFilters().add(
@@ -123,7 +136,7 @@ public class ExtractingPane {
         if (window == null) {
             return;
         }
-        java.io.File file = fileChooser.showOpenDialog(window);
+        File file = fileChooser.showOpenDialog(window);
         if (file != null) {
             Image image = new Image(file.toURI().toString());
             imageView.setImage(image);
@@ -140,26 +153,42 @@ public class ExtractingPane {
         try {
             BufferedImage buffered = SwingFXUtils.fromFXImage(image, null);
             String extracted = extractWithSelectedAlgorithm(buffered);
-            resultImageView.setImage(image); // show original image used for extraction
-            extractedTextArea.setText(extracted == null ? "" : extracted);
+            if (extracted == null) {
+                return; 
+            }
+            resultImageView.setImage(image);
+            extractedTextArea.setText(extracted);
 
-            if (extracted == null || extracted.isEmpty()) {
+            if (extracted.isEmpty()) {
                 showAlert(Alert.AlertType.INFORMATION, "Empty Image", "No secret message could be found.");
             }
 
         } catch (Exception ex) {
-            showAlert(Alert.AlertType.ERROR, "Extraction Failed", "Unable to extract the secret.");
+            showAlert(Alert.AlertType.ERROR, "Extraction Failed", ex.getMessage() != null ? ex.getMessage() : "Unable to extract the secret.");
         }
     }
 
     private String extractWithSelectedAlgorithm(BufferedImage buffered) {
-        String selection = algorithmChoice.getSelectionModel().getSelectedItem();
+        String selection = algorithmChoice.getValue();
         if ("LSB".equals(selection)) {
-            byte[] raw = new LSBSteganography().extract(buffered);
+            byte[] raw = new LSBAlgorithm().extract(buffered);
             return raw.length == 0 ? "" : new String(raw, StandardCharsets.UTF_8);
         }
         if ("Randomized LSB".equals(selection)) {
-            return "";
+            String seedText = seedField.getText();
+            if (seedText == null || seedText.isBlank()) {
+                showAlert(Alert.AlertType.ERROR, "Key Required", "Please enter an integer key for Randomized LSB.");
+                return null;
+            }
+            int seed;
+            try {
+                seed = Integer.parseInt(seedText.trim());
+            } catch (NumberFormatException e) {
+                showAlert(Alert.AlertType.ERROR, "Invalid Key", "The key must be an integer.");
+                return null;
+            }
+            byte[] raw = new RandomizedLSBAlgorithm(seed).extract(buffered);
+            return raw.length == 0 ? "" : new String(raw, StandardCharsets.UTF_8);
         }
         return "";
     }

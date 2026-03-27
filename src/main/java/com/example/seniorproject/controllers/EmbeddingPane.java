@@ -1,10 +1,11 @@
 package com.example.seniorproject.controllers;
-import com.example.seniorproject.algorithms.LSBSteganography;
+import com.example.seniorproject.algorithms.LSBAlgorithm;
+import com.example.seniorproject.algorithms.RandomizedLSBAlgorithm;
 
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.Objects;
 import javax.imageio.ImageIO;
 import javafx.embed.swing.SwingFXUtils;
 import javafx.collections.FXCollections;
@@ -14,6 +15,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
@@ -22,7 +24,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
-//pane for embedding a secret message in an image
+// Pane for embedding a secret message in an image
 public class EmbeddingPane {
     private final VBox root;
     private Image inputImage;
@@ -32,6 +34,7 @@ public class EmbeddingPane {
     private final Button submitButton;
     private final ChoiceBox<String> algorithmChoice;
     private final Label statusLabel;
+    private final TextField seedField;
 
     public Node getNode() {
         return root;
@@ -65,14 +68,29 @@ public class EmbeddingPane {
         secretSection.setPrefWidth(450);
         HBox row1 = new HBox(10, baseSection, secretSection);
 
-        //row 2: algorithm choice, submit button
+        // Row 2 -  algorithm choice, submit button, and optional seed field
         Label algorithmLabel = new Label("Steganography Algorithm:");
-        algorithmChoice = new ChoiceBox<>(FXCollections.observableArrayList("LSB", "Randomized LSB", "DCT"));
+        algorithmChoice = new ChoiceBox<>(FXCollections.observableArrayList("LSB", "Randomized LSB"));
         algorithmChoice.getSelectionModel().selectFirst();
         submitButton = new Button("Submit");
         submitButton.setOnAction(event -> handleSubmit());
         statusLabel = new Label("");
-        HBox row2 = new HBox(10, algorithmLabel, algorithmChoice, submitButton, statusLabel);
+        HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton, statusLabel);
+
+        Label seedLabel = new Label("Seed (integer):");
+        seedField = new TextField();
+        seedField.setPromptText("Enter an integer seed");
+        VBox seedBox = new VBox(5, seedLabel, seedField);
+        seedBox.setVisible(false);
+        seedBox.setManaged(false);
+
+        algorithmChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            boolean isRandomized = "Randomized LSB".equals(newVal);
+            seedBox.setVisible(isRandomized);
+            seedBox.setManaged(isRandomized);
+        });
+
+        VBox row2 = new VBox(5, controlsRow, seedBox);
         row2.setPadding(new Insets(10));
 
         //row 3: result image preview
@@ -83,7 +101,7 @@ public class EmbeddingPane {
         root.setPadding(new Insets(10));
     }
 
-    //ImageView
+    // ImageView
     private ImageView createImageView(Image image) {
         ImageView imageView = new ImageView(image);
         imageView.setFitWidth(300);
@@ -92,17 +110,16 @@ public class EmbeddingPane {
         return imageView;
     }
 
-    //default image
+    // Default image
     private Image loadDefaultImage() {
-        try (InputStream stream = Objects.requireNonNull(
-                getClass().getResourceAsStream("/com/example/seniorproject/img.png"))) {
+        InputStream stream = getClass().getResourceAsStream("/com/example/seniorproject/img.png");
+        if (stream != null) {
             return new Image(stream);
-        } catch (Exception ex) {
-            return new WritableImage(1, 1);
         }
+        return new WritableImage(1, 1);
     }
 
-    //file chooser to select image
+    // File chooser to select image
     private void openImageChooser() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.getExtensionFilters().add(
@@ -111,30 +128,15 @@ public class EmbeddingPane {
         if (window == null) {
             return;
         }
-        java.io.File file = fileChooser.showOpenDialog(window);
+        File file = fileChooser.showOpenDialog(window);
         if (file != null) {
-            Image image = new Image(file.toURI().toString());
-            inputImage = image;
-            baseImageView.setImage(image);
+            inputImage = new Image(file.toURI().toString());
+            baseImageView.setImage(inputImage);
         }
     }
 
-   //submit button
+    // Submit button
     private void handleSubmit() {
-        Window window = root.getScene() != null ? root.getScene().getWindow() : null;
-        if (window == null) {
-            statusLabel.setText("Error: no window.");
-            return;
-        }
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("PNG", "*.png"));
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("JPEG", "*.jpg", "*.jpeg"));
-        java.io.File outputFile = fileChooser.showSaveDialog(window);
-        if (outputFile == null) {
-            return; // user cancelled
-        }
         if (inputImage == null) {
             statusLabel.setText("Error: no input image.");
             return;
@@ -144,25 +146,47 @@ public class EmbeddingPane {
             statusLabel.setText("Error: no secret message.");
             return;
         }
+
+        // Ask the user where to save the output (PNG only — JPEG is lossy and would destroy hidden data)
+        Window window = root.getScene() != null ? root.getScene().getWindow() : null;
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG Image", "*.png"));
+        File outputFile = fileChooser.showSaveDialog(window);
+        if (outputFile == null) {
+            return; // user cancelled
+        }
+        if (!outputFile.getName().endsWith(".png")) {
+            outputFile = new File(outputFile.getAbsolutePath() + ".png");
+        }
+
         try {
             BufferedImage buffered = SwingFXUtils.fromFXImage(inputImage, null);
             if (buffered == null) {
-                statusLabel.setText("Error: could not convert image.");
+                statusLabel.setText("Error: could not read the image.");
                 return;
             }
-            String algorithm = algorithmChoice.getSelectionModel().getSelectedItem();
+
+            String algorithm = algorithmChoice.getValue();
             if ("LSB".equals(algorithm)) {
-                buffered = new LSBSteganography().embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
+                buffered = new LSBAlgorithm().embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
+            } else if ("Randomized LSB".equals(algorithm)) {
+                String seedText = seedField.getText();
+                if (seedText == null || seedText.isBlank()) {
+                    statusLabel.setText("Error: a seed is required for Randomized LSB.");
+                    return;
+                }
+                int seed;
+                try {
+                    seed = Integer.parseInt(seedText.trim());
+                } catch (NumberFormatException e) {
+                    statusLabel.setText("Error: seed must be an integer.");
+                    return;
+                }
+                buffered = new RandomizedLSBAlgorithm(seed).embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
             }
-            //output
-            String path = outputFile.getAbsolutePath().toLowerCase();
-            String format = path.endsWith(".jpg") || path.endsWith(".jpeg") ? "jpg" : "png";
-            if (!path.endsWith(".png") && !path.endsWith(".jpg") && !path.endsWith(".jpeg")) {
-                outputFile = new java.io.File(outputFile.getAbsolutePath() + (format.equals("jpg") ? ".jpg" : ".png"));
-            }
-            ImageIO.write(buffered, format, outputFile);
-            Image resultImage = SwingFXUtils.toFXImage(buffered, null);
-            resultImageView.setImage(resultImage);
+
+            ImageIO.write(buffered, "png", outputFile);
+            resultImageView.setImage(SwingFXUtils.toFXImage(buffered, null));
             statusLabel.setText("Saved: " + outputFile.getName());
         } catch (Exception ex) {
             statusLabel.setText("Error: " + ex.getMessage());
