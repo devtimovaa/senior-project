@@ -6,7 +6,7 @@ import java.util.Arrays;
 import static com.example.seniorproject.algorithms.LSBMethods.readByteFromPixels;
 import static com.example.seniorproject.algorithms.LSBMethods.storeByteInPixels;
 
-public class LSBSteganography implements SteganographyAlgorithm {
+public class LSBAlgorithm implements SteganographyAlgorithm {
 
     private static final int HEADER_BYTES   = 4;
     private static final int CHECKSUM_BYTES = 1;

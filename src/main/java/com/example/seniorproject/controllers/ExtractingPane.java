@@ -6,8 +6,8 @@ import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import javax.imageio.ImageIO;
 import javafx.collections.FXCollections;
-import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -34,6 +34,7 @@ public class ExtractingPane {
     private final Button submitButton;
     private final ChoiceBox<String> algorithmChoice;
     private final TextField seedField;
+    private File selectedFile;
 
     public Node getNode() {
         return root;
@@ -131,32 +132,36 @@ public class ExtractingPane {
     private void openImageChooser() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg"));
+                new FileChooser.ExtensionFilter("Image Files", "*.png"));
         Window window = root.getScene() != null ? root.getScene().getWindow() : null;
         if (window == null) {
             return;
         }
         File file = fileChooser.showOpenDialog(window);
         if (file != null) {
+            selectedFile = file;
             Image image = new Image(file.toURI().toString());
             imageView.setImage(image);
         }
     }
 
     private void handleSubmit() {
-        Image image = imageView.getImage();
-        if (image == null) {
+        if (selectedFile == null) {
             showAlert(Alert.AlertType.WARNING, "Image Missing", "Please choose an image!");
             return;
         }
 
         try {
-            BufferedImage buffered = SwingFXUtils.fromFXImage(image, null);
+            BufferedImage buffered = ImageIO.read(selectedFile);
+            if (buffered == null) {
+                showAlert(Alert.AlertType.ERROR, "Load Failed", "Could not read the image file.");
+                return;
+            }
             String extracted = extractWithSelectedAlgorithm(buffered);
             if (extracted == null) {
-                return; 
+                return;
             }
-            resultImageView.setImage(image);
+            resultImageView.setImage(imageView.getImage());
             extractedTextArea.setText(extracted);
 
             if (extracted.isEmpty()) {

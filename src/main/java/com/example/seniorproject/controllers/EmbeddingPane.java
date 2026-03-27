@@ -11,6 +11,7 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.scene.Node;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
@@ -27,7 +28,7 @@ import javafx.stage.Window;
 // Pane for embedding a secret message in an image
 public class EmbeddingPane {
     private final VBox root;
-    private Image inputImage;
+    private File selectedFile;
     private final ImageView baseImageView;
     private final ImageView resultImageView;
     private final TextArea secretTextArea;
@@ -40,15 +41,14 @@ public class EmbeddingPane {
         return root;
     }
 
-    //image picker, secret message, algorithm and result preview
+    // Image picker, secret message, algorithm and result preview
     public EmbeddingPane() {
 
         Image defaultImage = loadDefaultImage();
-        inputImage = defaultImage;
         baseImageView = createImageView(defaultImage);
         resultImageView = createImageView(defaultImage);
 
-        //row 1: left (original image), right (secret message)
+        // Row 1 -  left (original image), right (secret message)
         Label baseLabel = new Label("Original Image");
         Button chooseImageButton = new Button("Choose image");
         chooseImageButton.setOnAction(event -> openImageChooser());
@@ -77,9 +77,9 @@ public class EmbeddingPane {
         statusLabel = new Label("");
         HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton, statusLabel);
 
-        Label seedLabel = new Label("Seed (integer):");
+        Label seedLabel = new Label("Key (integer):");
         seedField = new TextField();
-        seedField.setPromptText("Enter an integer seed");
+        seedField.setPromptText("Enter an integer key");
         VBox seedBox = new VBox(5, seedLabel, seedField);
         seedBox.setVisible(false);
         seedBox.setManaged(false);
@@ -93,7 +93,7 @@ public class EmbeddingPane {
         VBox row2 = new VBox(5, controlsRow, seedBox);
         row2.setPadding(new Insets(10));
 
-        //row 3: result image preview
+        // Row 3 -  result image preview
         HBox row3 = new HBox(10, resultImageView);
         row3.setPadding(new Insets(10));
 
@@ -123,65 +123,70 @@ public class EmbeddingPane {
     private void openImageChooser() {
         FileChooser fileChooser = new FileChooser();
         fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg"));
+                new FileChooser.ExtensionFilter("Image Files", "*.png"));
         Window window = root.getScene() != null ? root.getScene().getWindow() : null;
         if (window == null) {
             return;
         }
         File file = fileChooser.showOpenDialog(window);
         if (file != null) {
-            inputImage = new Image(file.toURI().toString());
-            baseImageView.setImage(inputImage);
+            selectedFile = file;
+            baseImageView.setImage(new Image(file.toURI().toString()));
         }
     }
 
     // Submit button
     private void handleSubmit() {
-        if (inputImage == null) {
-            statusLabel.setText("Error: no input image.");
+        // Validate all inputs before opening the save dialog
+        if (selectedFile == null) {
+            showAlert(Alert.AlertType.WARNING, "Image Missing", "Please choose an image!");
             return;
         }
         String secret = secretTextArea.getText();
         if (secret == null || secret.isEmpty()) {
-            statusLabel.setText("Error: no secret message.");
+            showAlert(Alert.AlertType.WARNING, "Message Missing", "Please enter a secret message to embed.");
             return;
         }
+        String algorithm = algorithmChoice.getValue();
+        int seed = 0;
+        if ("Randomized LSB".equals(algorithm)) {
+            String seedText = seedField.getText();
+            if (seedText == null || seedText.isBlank()) {
+                showAlert(Alert.AlertType.ERROR, "Key Required", "Please enter an integer key for Randomized LSB.");
+                return;
+            }
+            try {
+                seed = Integer.parseInt(seedText.trim());
+            } catch (NumberFormatException e) {
+                showAlert(Alert.AlertType.ERROR, "Invalid Key", "The key must be an integer.");
+                return;
+            }
+        }
 
-        // Ask the user where to save the output (PNG only — JPEG is lossy and would destroy hidden data)
+        // Ask the user where to save the output (PNG only)
         Window window = root.getScene() != null ? root.getScene().getWindow() : null;
         FileChooser fileChooser = new FileChooser();
         fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG Image", "*.png"));
         File outputFile = fileChooser.showSaveDialog(window);
+
         if (outputFile == null) {
-            return; // user cancelled
+            return;
         }
+
         if (!outputFile.getName().endsWith(".png")) {
             outputFile = new File(outputFile.getAbsolutePath() + ".png");
         }
 
         try {
-            BufferedImage buffered = SwingFXUtils.fromFXImage(inputImage, null);
+            BufferedImage buffered = ImageIO.read(selectedFile);
             if (buffered == null) {
-                statusLabel.setText("Error: could not read the image.");
+                showAlert(Alert.AlertType.ERROR, "Image Error", "Could not read the selected image.");
                 return;
             }
 
-            String algorithm = algorithmChoice.getValue();
             if ("LSB".equals(algorithm)) {
                 buffered = new LSBAlgorithm().embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
             } else if ("Randomized LSB".equals(algorithm)) {
-                String seedText = seedField.getText();
-                if (seedText == null || seedText.isBlank()) {
-                    statusLabel.setText("Error: a seed is required for Randomized LSB.");
-                    return;
-                }
-                int seed;
-                try {
-                    seed = Integer.parseInt(seedText.trim());
-                } catch (NumberFormatException e) {
-                    statusLabel.setText("Error: seed must be an integer.");
-                    return;
-                }
                 buffered = new RandomizedLSBAlgorithm(seed).embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
             }
 
@@ -189,8 +194,16 @@ public class EmbeddingPane {
             resultImageView.setImage(SwingFXUtils.toFXImage(buffered, null));
             statusLabel.setText("Saved: " + outputFile.getName());
         } catch (Exception ex) {
-            statusLabel.setText("Error: " + ex.getMessage());
+            showAlert(Alert.AlertType.ERROR, "Embedding Failed", ex.getMessage() != null ? ex.getMessage() : "Unable to embed the message.");
         }
+    }
+
+    private void showAlert(Alert.AlertType type, String title, String message) {
+        Alert alert = new Alert(type);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        alert.setContentText(message);
+        alert.showAndWait();
     }
 }
 
