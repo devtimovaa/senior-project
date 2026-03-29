@@ -3,11 +3,13 @@ package com.example.seniorproject.controllers;
 import com.example.seniorproject.algorithms.LSBAlgorithm;
 import com.example.seniorproject.algorithms.RandomizedLSBAlgorithm;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import javax.imageio.ImageIO;
 import javafx.collections.FXCollections;
+import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -34,6 +36,7 @@ public class ExtractingPane {
     private final Button submitButton;
     private final ChoiceBox<String> algorithmChoice;
     private final TextField seedField;
+    private final ImageView extractedImageView;
     private File selectedFile;
 
     public Node getNode() {
@@ -99,8 +102,12 @@ public class ExtractingPane {
         row2Left.setPadding(new Insets(10));
         row2Left.setPrefWidth(350);
 
+        extractedImageView = createImageView(defaultImage);
+        extractedImageView.setVisible(false);
+        extractedImageView.setManaged(false);
+
         Label secretLabel = new Label("Extracted Secret:");
-        VBox row2Right = new VBox(10, secretLabel, extractedTextArea);
+        VBox row2Right = new VBox(10, secretLabel, extractedTextArea, extractedImageView);
         row2Right.setPadding(new Insets(10));
         row2Right.setPrefWidth(450);
 
@@ -157,15 +164,33 @@ public class ExtractingPane {
                 showAlert(Alert.AlertType.ERROR, "Load Failed", "Could not read the image file.");
                 return;
             }
-            String extracted = extractWithSelectedAlgorithm(buffered);
-            if (extracted == null) {
+            byte[] raw = extractBytesWithSelectedAlgorithm(buffered);
+            if (raw == null) {
                 return;
             }
             resultImageView.setImage(imageView.getImage());
-            extractedTextArea.setText(extracted);
 
-            if (extracted.isEmpty()) {
-                showAlert(Alert.AlertType.INFORMATION, "Empty Image", "No secret message could be found.");
+            if (isPngBytes(raw)) {
+                BufferedImage hiddenImage = ImageIO.read(new ByteArrayInputStream(raw));
+                if (hiddenImage == null) {
+                    showAlert(Alert.AlertType.ERROR, "Decode Failed", "Could not decode the hidden image.");
+                    return;
+                }
+                extractedImageView.setImage(SwingFXUtils.toFXImage(hiddenImage, null));
+                extractedImageView.setVisible(true);
+                extractedImageView.setManaged(true);
+                extractedTextArea.setVisible(false);
+                extractedTextArea.setManaged(false);
+            } else {
+                String extracted = raw.length == 0 ? "" : new String(raw, StandardCharsets.UTF_8);
+                extractedTextArea.setText(extracted);
+                extractedTextArea.setVisible(true);
+                extractedTextArea.setManaged(true);
+                extractedImageView.setVisible(false);
+                extractedImageView.setManaged(false);
+                if (extracted.isEmpty()) {
+                    showAlert(Alert.AlertType.INFORMATION, "Empty Result", "No secret message could be found.");
+                }
             }
 
         } catch (Exception ex) {
@@ -173,11 +198,10 @@ public class ExtractingPane {
         }
     }
 
-    private String extractWithSelectedAlgorithm(BufferedImage buffered) {
+    private byte[] extractBytesWithSelectedAlgorithm(BufferedImage buffered) {
         String selection = algorithmChoice.getValue();
         if ("LSB".equals(selection)) {
-            byte[] raw = new LSBAlgorithm().extract(buffered);
-            return raw.length == 0 ? "" : new String(raw, StandardCharsets.UTF_8);
+            return new LSBAlgorithm().extract(buffered);
         }
         if ("Randomized LSB".equals(selection)) {
             String seedText = seedField.getText();
@@ -192,10 +216,21 @@ public class ExtractingPane {
                 showAlert(Alert.AlertType.ERROR, "Invalid Key", "The key must be an integer.");
                 return null;
             }
-            byte[] raw = new RandomizedLSBAlgorithm(seed).extract(buffered);
-            return raw.length == 0 ? "" : new String(raw, StandardCharsets.UTF_8);
+            return new RandomizedLSBAlgorithm(seed).extract(buffered);
         }
-        return "";
+        return new byte[0];
+    }
+
+    private static boolean isPngBytes(byte[] bytes) {
+        if (bytes == null || bytes.length < 8) return false;
+        return (bytes[0] & 0xFF) == 0x89
+                && bytes[1] == 0x50  
+                && bytes[2] == 0x4E  
+                && bytes[3] == 0x47  
+                && bytes[4] == 0x0D
+                && bytes[5] == 0x0A
+                && bytes[6] == 0x1A
+                && bytes[7] == 0x0A;
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {

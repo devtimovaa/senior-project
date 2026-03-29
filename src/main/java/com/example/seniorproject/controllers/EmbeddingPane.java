@@ -3,7 +3,9 @@ import com.example.seniorproject.algorithms.LSBAlgorithm;
 import com.example.seniorproject.algorithms.RandomizedLSBAlgorithm;
 
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import javax.imageio.ImageIO;
@@ -29,11 +31,14 @@ import javafx.stage.Window;
 public class EmbeddingPane {
     private final VBox root;
     private File selectedFile;
+    private File selectedSecretFile;
     private final ImageView baseImageView;
     private final ImageView resultImageView;
+    private final ImageView secretImageView;
     private final TextArea secretTextArea;
     private final Button submitButton;
     private final ChoiceBox<String> algorithmChoice;
+    private final ChoiceBox<String> secretTypeChoice;
     private final Label statusLabel;
     private final TextField seedField;
 
@@ -57,13 +62,36 @@ public class EmbeddingPane {
         baseSection.setPrefWidth(450);
 
         Label secretLabel = new Label("Secret Message:");
-        ChoiceBox<String> secretTypeChoice =
-                new ChoiceBox<>(FXCollections.observableArrayList("Text"));
+        secretTypeChoice = new ChoiceBox<>(FXCollections.observableArrayList("Text", "Image"));
         secretTypeChoice.getSelectionModel().selectFirst();
+
         Label secretTextLabel = new Label("Message to be embedded:");
         secretTextArea = new TextArea();
         secretTextArea.setPromptText("Write the secret message to be embedded:");
-        VBox secretSection = new VBox(10, secretLabel, secretTypeChoice, secretTextLabel, secretTextArea);
+
+        Image defaultSecretImage = loadDefaultImage();
+        secretImageView = createImageView(defaultSecretImage);
+        secretImageView.setVisible(false);
+        secretImageView.setManaged(false);
+
+        Button chooseSecretImageButton = new Button("Choose secret image");
+        chooseSecretImageButton.setVisible(false);
+        chooseSecretImageButton.setManaged(false);
+        chooseSecretImageButton.setOnAction(event -> openSecretImageChooser());
+
+        secretTypeChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
+            boolean isImage = "Image".equals(newVal);
+            secretTextLabel.setVisible(!isImage);
+            secretTextLabel.setManaged(!isImage);
+            secretTextArea.setVisible(!isImage);
+            secretTextArea.setManaged(!isImage);
+            chooseSecretImageButton.setVisible(isImage);
+            chooseSecretImageButton.setManaged(isImage);
+            secretImageView.setVisible(isImage);
+            secretImageView.setManaged(isImage);
+        });
+
+        VBox secretSection = new VBox(10, secretLabel, secretTypeChoice, secretTextLabel, secretTextArea, chooseSecretImageButton, secretImageView);
         secretSection.setPadding(new Insets(10));
         secretSection.setPrefWidth(450);
         HBox row1 = new HBox(10, baseSection, secretSection);
@@ -135,6 +163,22 @@ public class EmbeddingPane {
         }
     }
 
+    // File chooser to select the secret image
+    private void openSecretImageChooser() {
+        FileChooser fileChooser = new FileChooser();
+        fileChooser.getExtensionFilters().add(
+                new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg"));
+        Window window = root.getScene() != null ? root.getScene().getWindow() : null;
+        if (window == null) {
+            return;
+        }
+        File file = fileChooser.showOpenDialog(window);
+        if (file != null) {
+            selectedSecretFile = file;
+            secretImageView.setImage(new Image(file.toURI().toString()));
+        }
+    }
+
     // Submit button
     private void handleSubmit() {
         // Validate all inputs before opening the save dialog
@@ -142,10 +186,33 @@ public class EmbeddingPane {
             showAlert(Alert.AlertType.WARNING, "Image Missing", "Please choose an image!");
             return;
         }
-        String secret = secretTextArea.getText();
-        if (secret == null || secret.isEmpty()) {
-            showAlert(Alert.AlertType.WARNING, "Message Missing", "Please enter a secret message to embed.");
-            return;
+        boolean hidingImage = "Image".equals(secretTypeChoice.getValue());
+        byte[] bytesToHide;
+        if (hidingImage) {
+            if (selectedSecretFile == null) {
+                showAlert(Alert.AlertType.WARNING, "Secret Image Missing", "Please choose a secret image to embed.");
+                return;
+            }
+            try {
+                BufferedImage secretBuffered = ImageIO.read(selectedSecretFile);
+                if (secretBuffered == null) {
+                    showAlert(Alert.AlertType.ERROR, "Image Error", "Could not read the secret image.");
+                    return;
+                }
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(secretBuffered, "png", baos);
+                bytesToHide = baos.toByteArray();
+            } catch (IOException e) {
+                showAlert(Alert.AlertType.ERROR, "Image Error", "Failed to encode secret image: " + e.getMessage());
+                return;
+            }
+        } else {
+            String secret = secretTextArea.getText();
+            if (secret == null || secret.isEmpty()) {
+                showAlert(Alert.AlertType.WARNING, "Message Missing", "Please enter a secret message to embed.");
+                return;
+            }
+            bytesToHide = secret.getBytes(StandardCharsets.UTF_8);
         }
         String algorithm = algorithmChoice.getValue();
         int seed = 0;
@@ -185,9 +252,9 @@ public class EmbeddingPane {
             }
 
             if ("LSB".equals(algorithm)) {
-                buffered = new LSBAlgorithm().embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
+                buffered = new LSBAlgorithm().embed(buffered, bytesToHide);
             } else if ("Randomized LSB".equals(algorithm)) {
-                buffered = new RandomizedLSBAlgorithm(seed).embed(buffered, secret.getBytes(StandardCharsets.UTF_8));
+                buffered = new RandomizedLSBAlgorithm(seed).embed(buffered, bytesToHide);
             }
 
             ImageIO.write(buffered, "png", outputFile);
