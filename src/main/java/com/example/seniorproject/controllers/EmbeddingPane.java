@@ -102,8 +102,10 @@ public class EmbeddingPane {
         algorithmChoice.getSelectionModel().selectFirst();
         submitButton = new Button("Submit");
         submitButton.setOnAction(event -> handleSubmit());
+        Button clearButton = new Button("Clear");
+        clearButton.setOnAction(event -> handleClear());
         statusLabel = new Label("");
-        HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton, statusLabel);
+        HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton, clearButton, statusLabel);
 
         Label seedLabel = new Label("Key (integer):");
         seedField = new TextField();
@@ -179,8 +181,9 @@ public class EmbeddingPane {
         }
     }
 
-    // Submit button
+    // Submit button logic
     private void handleSubmit() {
+
         // Validate all inputs before opening the save dialog
         if (selectedFile == null) {
             showAlert(Alert.AlertType.WARNING, "Image Missing", "Please choose an image!");
@@ -263,6 +266,22 @@ public class EmbeddingPane {
         } catch (Exception ex) {
             showAlert(Alert.AlertType.ERROR, "Embedding Failed", ex.getMessage() != null ? ex.getMessage() : "Unable to embed the message.");
         }
+    }
+
+    private void handleClear() {
+        Image defaultImage = loadDefaultImage();
+        selectedFile = null;
+        selectedSecretFile = null;
+        baseImageView.setImage(defaultImage);
+        resultImageView.setImage(defaultImage);
+        secretTextArea.clear();
+        secretImageView.setImage(defaultImage);
+        secretImageView.setVisible(false);
+        secretImageView.setManaged(false);
+        secretTypeChoice.getSelectionModel().selectFirst();
+        algorithmChoice.getSelectionModel().selectFirst();
+        seedField.clear();
+        statusLabel.setText("");
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {

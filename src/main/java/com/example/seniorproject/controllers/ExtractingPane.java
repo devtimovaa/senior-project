@@ -62,6 +62,9 @@ public class ExtractingPane {
         submitButton = new Button("Submit");
         submitButton.setOnAction(event -> handleSubmit());
 
+        Button clearButton = new Button("Clear");
+        clearButton.setOnAction(event -> handleClear());
+
         // Image selection and default/chosen image
         Label imageLabel = new Label("Image to Extract From");
         Button chooseButton = new Button("Choose image");
@@ -72,7 +75,7 @@ public class ExtractingPane {
 
      
         Label algorithmLabel = new Label("Steganography Algorithm:");
-        HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton);
+        HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton, clearButton);
         controlsRow.setAlignment(Pos.CENTER);
 
         Label seedLabel = new Label("Key:");
@@ -221,6 +224,7 @@ public class ExtractingPane {
         return new byte[0];
     }
 
+    // Detect if text or image was hidden
     private static boolean isPngBytes(byte[] bytes) {
         if (bytes == null || bytes.length < 8) return false;
         return (bytes[0] & 0xFF) == 0x89
@@ -231,6 +235,21 @@ public class ExtractingPane {
                 && bytes[5] == 0x0A
                 && bytes[6] == 0x1A
                 && bytes[7] == 0x0A;
+    }
+
+    private void handleClear() {
+        Image defaultImage = loadDefaultImage();
+        selectedFile = null;
+        imageView.setImage(defaultImage);
+        resultImageView.setImage(defaultImage);
+        extractedTextArea.clear();
+        extractedTextArea.setVisible(true);
+        extractedTextArea.setManaged(true);
+        extractedImageView.setImage(defaultImage);
+        extractedImageView.setVisible(false);
+        extractedImageView.setManaged(false);
+        algorithmChoice.getSelectionModel().selectFirst();
+        seedField.clear();
     }
 
     private void showAlert(Alert.AlertType type, String title, String message) {
