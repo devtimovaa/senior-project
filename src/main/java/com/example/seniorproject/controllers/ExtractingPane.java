@@ -31,8 +31,8 @@ import javafx.stage.Window;
 public class ExtractingPane {
     private final VBox root; //root container
     private final ImageView imageView; //show the chosen/default image (top left)
-    private final ImageView resultImageView; //show the original image after extraction (below right)
-    private final TextArea extractedTextArea; //display the extracted secret (below right)
+    private final TextArea extractedTextArea; //display the extracted secret
+    private final Label secretLabel;
     private final Button submitButton;
     private final ChoiceBox<String> algorithmChoice;
     private final TextField seedField;
@@ -48,11 +48,12 @@ public class ExtractingPane {
         // Load a default image to appear (top left)
         Image defaultImage = loadDefaultImage();
         imageView = createImageView(defaultImage);
-        resultImageView = createImageView(defaultImage); 
 
         extractedTextArea = new TextArea();
         extractedTextArea.setEditable(false);
         extractedTextArea.setPromptText("Extracted message will appear here");
+        extractedTextArea.setVisible(false);
+        extractedTextArea.setManaged(false);
 
         // Algorithm choices
         algorithmChoice = new ChoiceBox<>(
@@ -99,22 +100,21 @@ public class ExtractingPane {
         //First row - left (image to extract from + default/loaded image), right (algorithm + submit)
         HBox row1 = new HBox(10, leftColumn, topRight);
 
-        //Second row - left (original Image), right (extracted secret and text area)
-        Label originalImageLabel = new Label("Original Image");
-        VBox row2Left = new VBox(10, originalImageLabel, resultImageView);
-        row2Left.setPadding(new Insets(10));
-        row2Left.setPrefWidth(350);
-
-        extractedImageView = createImageView(defaultImage);
+        //Second row - extracted secret (text or image), shown only after submission
+        extractedImageView = new ImageView();
+        extractedImageView.setFitWidth(400);
+        extractedImageView.setFitHeight(400);
+        extractedImageView.setPreserveRatio(true);
         extractedImageView.setVisible(false);
         extractedImageView.setManaged(false);
 
-        Label secretLabel = new Label("Extracted Secret:");
-        VBox row2Right = new VBox(10, secretLabel, extractedTextArea, extractedImageView);
-        row2Right.setPadding(new Insets(10));
-        row2Right.setPrefWidth(450);
+        secretLabel = new Label("Extracted Secret:");
+        secretLabel.setVisible(false);
+        secretLabel.setManaged(false);
 
-        HBox row2 = new HBox(10, row2Left, row2Right);
+        VBox row2 = new VBox(10, secretLabel, extractedTextArea, extractedImageView);
+        row2.setPadding(new Insets(10));
+        row2.setAlignment(Pos.CENTER);
 
         root = new VBox(10, row1, row2);
         root.setPadding(new Insets(10));
@@ -152,6 +152,17 @@ public class ExtractingPane {
             selectedFile = file;
             Image image = new Image(file.toURI().toString());
             imageView.setImage(image);
+
+            extractedTextArea.clear();
+            extractedTextArea.setVisible(false);
+            extractedTextArea.setManaged(false);
+
+            extractedImageView.setImage(null);
+            extractedImageView.setVisible(false);
+            extractedImageView.setManaged(false);
+            
+            secretLabel.setVisible(false);
+            secretLabel.setManaged(false);
         }
     }
 
@@ -171,7 +182,8 @@ public class ExtractingPane {
             if (raw == null) {
                 return;
             }
-            resultImageView.setImage(imageView.getImage());
+            secretLabel.setVisible(true);
+            secretLabel.setManaged(true);
 
             if (isPngBytes(raw)) {
                 BufferedImage hiddenImage = ImageIO.read(new ByteArrayInputStream(raw));
@@ -241,13 +253,14 @@ public class ExtractingPane {
         Image defaultImage = loadDefaultImage();
         selectedFile = null;
         imageView.setImage(defaultImage);
-        resultImageView.setImage(defaultImage);
         extractedTextArea.clear();
-        extractedTextArea.setVisible(true);
-        extractedTextArea.setManaged(true);
-        extractedImageView.setImage(defaultImage);
+        extractedTextArea.setVisible(false);
+        extractedTextArea.setManaged(false);
+        extractedImageView.setImage(null);
         extractedImageView.setVisible(false);
         extractedImageView.setManaged(false);
+        secretLabel.setVisible(false);
+        secretLabel.setManaged(false);
         algorithmChoice.getSelectionModel().selectFirst();
         seedField.clear();
     }
