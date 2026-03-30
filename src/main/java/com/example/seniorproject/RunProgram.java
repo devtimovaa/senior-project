@@ -1,5 +1,6 @@
 package com.example.seniorproject;
 
+import com.example.seniorproject.controllers.AnalyzingPane;
 import com.example.seniorproject.controllers.EmbeddingPane;
 import com.example.seniorproject.controllers.ExtractingPane;
 
@@ -19,10 +20,12 @@ public class RunProgram extends Application {
     public void start(Stage primaryStage) {
         EmbeddingPane embeddingPane = new EmbeddingPane();
         ExtractingPane extractingPane = new ExtractingPane();
+        AnalyzingPane analyzingPane = new AnalyzingPane();
 
         TabPane tabPane = new TabPane();
         tabPane.getTabs().add(new Tab("Embed Message", embeddingPane.getNode()));
         tabPane.getTabs().add(new Tab("Extract Message", extractingPane.getNode()));
+        tabPane.getTabs().add(new Tab("Analyze Image", analyzingPane.getNode()));
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
 
