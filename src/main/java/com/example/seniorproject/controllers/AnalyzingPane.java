@@ -11,6 +11,7 @@ import javafx.geometry.Insets;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.image.Image;
@@ -37,12 +38,12 @@ public class AnalyzingPane {
 
     private ImageView activeOriginalView;
     private ImageView activeStegoView;
-    private ImageView activeLsbXrayView;
+    private ImageView activeLsbAttackView;
     private ImageView activeHeatmapView;
 
     private Label activeOriginalLabel;
     private Label activeStegoLabel;
-    private Label activeLsbXrayLabel;
+    private Label activeLsbAttackLabel;
     private Label activeHeatmapLabel;
 
     public Node getNode() {
@@ -85,22 +86,27 @@ public class AnalyzingPane {
 
     // Default row with default images
     private void addDefaultRow() {
-        //Load four default images
         Image def = loadDefaultImage();
         activeOriginalLabel  = new Label("Original");
         activeOriginalView   = createImageView(def);
+        makeZoomable(activeOriginalView, activeOriginalLabel);
         VBox originalCol     = new VBox(5, activeOriginalLabel,  activeOriginalView);
+
         activeStegoLabel     = new Label("Stego");
         activeStegoView      = createImageView(def);
+        makeZoomable(activeStegoView, activeStegoLabel);
         VBox stegoCol        = new VBox(5, activeStegoLabel,     activeStegoView);
-        activeLsbXrayLabel   = new Label("X-ray");
-        activeLsbXrayView    = createImageView(def);
-        VBox lsbCol          = new VBox(5, activeLsbXrayLabel,   activeLsbXrayView);
+
+        activeLsbAttackLabel = new Label("LSB Attack");
+        activeLsbAttackView  = createImageView(def);
+        makeZoomable(activeLsbAttackView, activeLsbAttackLabel);
+        VBox lsbCol          = new VBox(5, activeLsbAttackLabel, activeLsbAttackView);
+
         activeHeatmapLabel   = new Label("Difference heatmap");
         activeHeatmapView    = createImageView(def);
+        makeZoomable(activeHeatmapView, activeHeatmapLabel);
         VBox heatmapCol      = new VBox(5, activeHeatmapLabel,   activeHeatmapView);
 
-        // Row
         activeRow = new VBox(5, new HBox(10, originalCol, stegoCol, lsbCol, heatmapCol));
         activeRow.setPadding(new Insets(10));
 
@@ -153,14 +159,14 @@ public class AnalyzingPane {
 
             long startTime = System.nanoTime();
 
-            // X-Ray
-            BufferedImage xray = lsbXray(stego);
+            BufferedImage lsbSpec = lsbXraySpec(stego);
 
-            // Difference heatmap
+            // Difference heatmap 
             BufferedImage heatmap = null;
-            int modifiedPixels = 0; //count the modified pixels 
+            int modifiedPixels = 0;
+            double mse  = Double.NaN;
+            double psnr = Double.NaN;
 
-            // Compare images
             if (selectedOriginalFile != null) {
                 BufferedImage original = ImageIO.read(selectedOriginalFile);
                 if (original == null) {
@@ -175,11 +181,11 @@ public class AnalyzingPane {
                 int[] counts = new int[1];
                 heatmap = differenceHeatmap(original, stego, counts);
                 modifiedPixels = counts[0];
+                mse  = calculateMse(original, stego);
+                psnr = mse == 0 ? Double.POSITIVE_INFINITY : 10.0 * Math.log10(255.0 * 255.0 / mse);
             }
 
-            // Calculate time
             long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
-            // Calculate memory
             long memoryBytes = (long) stego.getWidth() * stego.getHeight() * 3;
 
             StringBuilder stats = new StringBuilder(String.format(
@@ -190,17 +196,20 @@ public class AnalyzingPane {
                 int total = stego.getWidth() * stego.getHeight();
                 stats.append(String.format("  |  Modified pixels: %d / %d (%.2f%%)",
                         modifiedPixels, total, 100.0 * modifiedPixels / total));
+                stats.append(String.format("  |  MSE: %.4f", mse));
+                String psnrStr = Double.isInfinite(psnr) ? "∞" : String.format("%.2f", psnr);
+                stats.append(String.format("  |  PSNR: %s dB", psnrStr));
             }
 
             // Update active row
-            activeLsbXrayView.setImage(SwingFXUtils.toFXImage(xray, null));
-            activeLsbXrayLabel.setText("LSB X-ray (lower 3 bits ×32)");
+            activeLsbAttackView.setImage(SwingFXUtils.toFXImage(lsbSpec, null));
+            activeLsbAttackLabel.setText("LSB Attack");
 
             if (heatmap != null) {
                 activeHeatmapView.setImage(SwingFXUtils.toFXImage(heatmap, null));
-                activeHeatmapLabel.setText("Difference heatmap (×50, channel-coloured)");
+                activeHeatmapLabel.setText("Difference heatmap");
             } else {
-                activeHeatmapLabel.setText("Difference heatmap — load original to enable");
+                activeHeatmapLabel.setText("Difference heatmap - load an original to enable");
             }
             activeRow.getChildren().add(new Label(stats.toString()));
 
@@ -216,18 +225,17 @@ public class AnalyzingPane {
         }
     }
 
-    // X-Ray
-    private static BufferedImage lsbXray(BufferedImage source) {
-        int w = source.getWidth(), h = source.getHeight(); 
-        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB); //create a copy of the image
-        //Loop and get the RGB values
+
+    private static BufferedImage lsbXraySpec(BufferedImage source) {
+        int w = source.getWidth(), h = source.getHeight();
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_RGB);
         for (int y = 0; y < h; y++) {
             for (int x = 0; x < w; x++) {
                 int rgb = source.getRGB(x, y);
-                int r = ((rgb >> 16) & 0x07) * 32;
-                int g = ((rgb >>  8) & 0x07) * 32; 
-                int b = (rgb         & 0x07) * 32;
-                out.setRGB(x, y, (r << 16) | (g << 8) | b); // set the values
+                int r = ((rgb >> 16) & 0x01) * 255;
+                int g = ((rgb >>  8) & 0x01) * 255;
+                int b = (rgb         & 0x01) * 255;
+                out.setRGB(x, y, (r << 16) | (g << 8) | b);
             }
         }
         return out;
@@ -252,6 +260,40 @@ public class AnalyzingPane {
         }
         counts[0] = modified;
         return out;
+    }
+
+    // Open the images in full-size 
+    private static void makeZoomable(ImageView view, Label titleLabel) {
+        view.setOnMouseClicked(e -> {
+            Image img = view.getImage();
+            if (img == null || img.getWidth() <= 1) return;
+            ImageView zoomed = new ImageView(img);
+            zoomed.setFitWidth(600);
+            zoomed.setFitHeight(600);
+            zoomed.setPreserveRatio(true);
+            Alert dialog = new Alert(Alert.AlertType.NONE);
+            dialog.setTitle(titleLabel.getText());
+            dialog.getDialogPane().setContent(zoomed);
+            dialog.getDialogPane().getButtonTypes().add(ButtonType.CLOSE);
+            dialog.show();
+        });
+    }
+
+    // MSE = average squared difference per channel across all pixels
+    private static double calculateMse(BufferedImage original, BufferedImage stego) {
+        int w = original.getWidth(), h = original.getHeight();
+        long mseSum = 0;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int oRgb = original.getRGB(x, y);
+                int sRgb = stego.getRGB(x, y);
+                for (int shift : new int[]{16, 8, 0}) {
+                    int diff = ((oRgb >> shift) & 0xFF) - ((sRgb >> shift) & 0xFF);
+                    mseSum += (long) diff * diff;
+                }
+            }
+        }
+        return mseSum / (double)(w * h * 3);
     }
 
     // Format the bytes 

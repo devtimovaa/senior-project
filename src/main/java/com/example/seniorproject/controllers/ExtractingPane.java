@@ -1,5 +1,6 @@
 package com.example.seniorproject.controllers;
 
+import com.example.seniorproject.algorithms.JosephusLSB332Algorithm;
 import com.example.seniorproject.algorithms.LSBAlgorithm;
 import com.example.seniorproject.algorithms.RandomizedLSBAlgorithm;
 import java.awt.image.BufferedImage;
@@ -57,7 +58,7 @@ public class ExtractingPane {
 
         // Algorithm choices
         algorithmChoice = new ChoiceBox<>(
-                FXCollections.observableArrayList("LSB", "Randomized LSB"));
+                FXCollections.observableArrayList("LSB", "Randomized LSB", "Josephus LSB 3-3-2"));
         algorithmChoice.getSelectionModel().selectFirst();
 
         submitButton = new Button("Submit");
@@ -79,7 +80,7 @@ public class ExtractingPane {
         HBox controlsRow = new HBox(10, algorithmLabel, algorithmChoice, submitButton, clearButton);
         controlsRow.setAlignment(Pos.CENTER);
 
-        Label seedLabel = new Label("Key:");
+        Label seedLabel = new Label("Key (integer):");
         seedField = new TextField();
         seedField.setPromptText("Enter an integer key");
         VBox seedBox = new VBox(5, seedLabel, seedField);
@@ -87,9 +88,14 @@ public class ExtractingPane {
         seedBox.setManaged(false);
 
         algorithmChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            boolean isRandomized = "Randomized LSB".equals(newVal);
-            seedBox.setVisible(isRandomized);
-            seedBox.setManaged(isRandomized);
+            boolean needsSeed = "Randomized LSB".equals(newVal) || "Josephus LSB 3-3-2".equals(newVal);
+            seedBox.setVisible(needsSeed);
+            seedBox.setManaged(needsSeed);
+            if ("Randomized LSB".equals(newVal)) {
+                seedLabel.setText("Key (" + RandomizedLSBAlgorithm.MIN_KEY + " - " + RandomizedLSBAlgorithm.MAX_KEY + "):");
+            } else if ("Josephus LSB 3-3-2".equals(newVal)) {
+                seedLabel.setText("Key (" + JosephusLSB332Algorithm.MIN_KEY + " - " + JosephusLSB332Algorithm.MAX_KEY + "):");
+            }
         });
 
         VBox topRight = new VBox(10, controlsRow, seedBox);
@@ -231,7 +237,32 @@ public class ExtractingPane {
                 showAlert(Alert.AlertType.ERROR, "Invalid Key", "The key must be an integer.");
                 return null;
             }
+            if (seed < RandomizedLSBAlgorithm.MIN_KEY || seed > RandomizedLSBAlgorithm.MAX_KEY) {
+                showAlert(Alert.AlertType.ERROR, "Key Out of Range",
+                        "Key must be between " + RandomizedLSBAlgorithm.MIN_KEY + " and " + RandomizedLSBAlgorithm.MAX_KEY + ".");
+                return null;
+            }
             return new RandomizedLSBAlgorithm(seed).extract(buffered);
+        }
+        if ("Josephus LSB 3-3-2".equals(selection)) {
+            String seedText = seedField.getText();
+            if (seedText == null || seedText.isBlank()) {
+                showAlert(Alert.AlertType.ERROR, "Key Required", "Please enter an integer key.");
+                return null;
+            }
+            int seed;
+            try {
+                seed = Integer.parseInt(seedText.trim());
+            } catch (NumberFormatException e) {
+                showAlert(Alert.AlertType.ERROR, "Invalid Key", "The key must be an integer.");
+                return null;
+            }
+            if (seed < JosephusLSB332Algorithm.MIN_KEY || seed > JosephusLSB332Algorithm.MAX_KEY) {
+                showAlert(Alert.AlertType.ERROR, "Key Out of Range",
+                        "Key must be between " + JosephusLSB332Algorithm.MIN_KEY + " and " + JosephusLSB332Algorithm.MAX_KEY + ".");
+                return null;
+            }
+            return new JosephusLSB332Algorithm(seed).extract(buffered);
         }
         return new byte[0];
     }

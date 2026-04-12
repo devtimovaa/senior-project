@@ -1,4 +1,5 @@
 package com.example.seniorproject.controllers;
+import com.example.seniorproject.algorithms.JosephusLSB332Algorithm;
 import com.example.seniorproject.algorithms.LSBAlgorithm;
 import com.example.seniorproject.algorithms.RandomizedLSBAlgorithm;
 
@@ -98,7 +99,7 @@ public class EmbeddingPane {
 
         // Row 2 -  algorithm choice, submit button, and optional seed field
         Label algorithmLabel = new Label("Steganography Algorithm:");
-        algorithmChoice = new ChoiceBox<>(FXCollections.observableArrayList("LSB", "Randomized LSB"));
+        algorithmChoice = new ChoiceBox<>(FXCollections.observableArrayList("LSB", "Randomized LSB", "Josephus LSB 3-3-2"));
         algorithmChoice.getSelectionModel().selectFirst();
         submitButton = new Button("Submit");
         submitButton.setOnAction(event -> handleSubmit());
@@ -115,9 +116,14 @@ public class EmbeddingPane {
         seedBox.setManaged(false);
 
         algorithmChoice.getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            boolean isRandomized = "Randomized LSB".equals(newVal);
-            seedBox.setVisible(isRandomized);
-            seedBox.setManaged(isRandomized);
+            boolean needsSeed = "Randomized LSB".equals(newVal) || "Josephus LSB 3-3-2".equals(newVal);
+            seedBox.setVisible(needsSeed);
+            seedBox.setManaged(needsSeed);
+            if ("Randomized LSB".equals(newVal)) {
+                seedLabel.setText("Key (" + RandomizedLSBAlgorithm.MIN_KEY + " - " + RandomizedLSBAlgorithm.MAX_KEY + "):");
+            } else if ("Josephus LSB 3-3-2".equals(newVal)) {
+                seedLabel.setText("Key (" + JosephusLSB332Algorithm.MIN_KEY + " - " + JosephusLSB332Algorithm.MAX_KEY + "):");
+            }
         });
 
         VBox row2 = new VBox(5, controlsRow, seedBox);
@@ -219,16 +225,28 @@ public class EmbeddingPane {
         }
         String algorithm = algorithmChoice.getValue();
         int seed = 0;
-        if ("Randomized LSB".equals(algorithm)) {
+        if ("Randomized LSB".equals(algorithm) || "Josephus LSB 3-3-2".equals(algorithm)) {
             String seedText = seedField.getText();
             if (seedText == null || seedText.isBlank()) {
-                showAlert(Alert.AlertType.ERROR, "Key Required", "Please enter an integer key for Randomized LSB.");
+                showAlert(Alert.AlertType.ERROR, "Key Required", "Please enter an integer key.");
                 return;
             }
             try {
                 seed = Integer.parseInt(seedText.trim());
             } catch (NumberFormatException e) {
                 showAlert(Alert.AlertType.ERROR, "Invalid Key", "The key must be an integer.");
+                return;
+            }
+            if ("Randomized LSB".equals(algorithm)
+                    && (seed < RandomizedLSBAlgorithm.MIN_KEY || seed > RandomizedLSBAlgorithm.MAX_KEY)) {
+                showAlert(Alert.AlertType.ERROR, "Key Out of Range",
+                        "Key must be between " + RandomizedLSBAlgorithm.MIN_KEY + " and " + RandomizedLSBAlgorithm.MAX_KEY + ".");
+                return;
+            }
+            if ("Josephus LSB 3-3-2".equals(algorithm)
+                    && (seed < JosephusLSB332Algorithm.MIN_KEY || seed > JosephusLSB332Algorithm.MAX_KEY)) {
+                showAlert(Alert.AlertType.ERROR, "Key Out of Range",
+                        "Key must be between " + JosephusLSB332Algorithm.MIN_KEY + " and " + JosephusLSB332Algorithm.MAX_KEY + ".");
                 return;
             }
         }
@@ -258,6 +276,8 @@ public class EmbeddingPane {
                 buffered = new LSBAlgorithm().embed(buffered, bytesToHide);
             } else if ("Randomized LSB".equals(algorithm)) {
                 buffered = new RandomizedLSBAlgorithm(seed).embed(buffered, bytesToHide);
+            } else if ("Josephus LSB 3-3-2".equals(algorithm)) {
+                buffered = new JosephusLSB332Algorithm(seed).embed(buffered, bytesToHide);
             }
 
             ImageIO.write(buffered, "png", outputFile);
