@@ -51,4 +51,12 @@ class LSBMethods {
         int newPixel        = (oldPixel & ~(0xFF << shift)) | (newChannelValue << shift);
         base.setRGB(x, y, newPixel);
     }
+
+    static byte checksum(byte[] data) {
+        byte xor = 0;
+        for (byte b : data) {
+            xor ^= b;
+        }
+        return xor;
+    }
 }
