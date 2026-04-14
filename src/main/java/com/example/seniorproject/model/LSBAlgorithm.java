@@ -2,88 +2,85 @@ package com.example.seniorproject.model;
 
 import java.awt.image.BufferedImage;
 
-// helper functions from the LSBMethods class
 import static com.example.seniorproject.model.LSBMethods.checksum;
 import static com.example.seniorproject.model.LSBMethods.readByteFromPixels;
 import static com.example.seniorproject.model.LSBMethods.storeByteInPixels;
 
-/*  
-This is the class referencing the lSB algorithm.
-LSB = Least Significant Bit - we change the smallest, least noticeable part of each color channel
+/* 
+ Sequential LSB (Least Significant Bit) steganography
+ This algoritm hides data by replacing the least significant bit of each RGB channel in consecutive pixels.
 */
-// The class will follow the rules of the interface
 public class LSBAlgorithm implements SteganographyAlgorithm {
 
-    // define the contsants
-    private static final int HEADER_BYTES   = 4; // used to store the length of the data
-    private static final int CHECKSUM_BYTES = 1; // used to verify the integrity extracted data 
+    private static final int HEADER_BYTES   = 4;
+    private static final int CHECKSUM_BYTES = 1;
 
-    // embedding method
+    //Embeds secret data into a cover image containing the hidden data
     @Override
-    public BufferedImage embed(BufferedImage base, byte[] data) {
+    public BufferedImage embed(BufferedImage coverImage, byte[] secret) {
+        byte[] payload = secret == null ? new byte[0] : secret;
 
-        byte[] payload = data == null ? new byte[0] : data; // treat no data as empty array
-
-        int bitsNeeded = (HEADER_BYTES + payload.length + CHECKSUM_BYTES) * 8;  //how much  in bits we want to hide
-        //pixel has 3 bits - one for red, one for blue, one for green
-        int bitsAvailable = base.getWidth() * base.getHeight() * 3; //how much bits are available deppending on thsi image
-        //check if the image is large enough
+        //Each pixel has 3 color channels (R, G, B) and each provides 1 usable bit
+        int bitsNeeded    = (HEADER_BYTES + payload.length + CHECKSUM_BYTES) * 8;
+        int bitsAvailable = coverImage.getWidth() * coverImage.getHeight() * 3;
         if (bitsNeeded > bitsAvailable) {
             throw new IllegalArgumentException(
-                    "The selected image too small: you want to hide " + bitsNeeded + " bits, but only " + bitsAvailable + " are available. ");
+                    "Image too small: need " + bitsNeeded + " bits, have " + bitsAvailable);
         }
 
-        // Make a copy of the image so we don't change the original image - blank image of the same size
-        int w = base.getWidth();
-        int h = base.getHeight();
-        BufferedImage copy = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        copy.setRGB(0,0, w, h, base.getRGB(0, 0, w, h, null, 0, w), 0, w);
+        //Work on a copy so the original image stays untouched
+        int w = coverImage.getWidth();
+        int h = coverImage.getHeight();
+        BufferedImage stegoImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        stegoImage.setRGB(0, 0, w, h, coverImage.getRGB(0, 0, w, h, null, 0, w), 0, w);
 
-        // Payload length stored as 4 bytes in big-endian order
+        //Split payload length into 4 bytes (big-endian) and store sequentially
         for (int i = 0; i < HEADER_BYTES; i++) {
             int shift = 24 - 8 * i;
-            storeByteInPixels((byte) ((payload.length >> shift) & 0xFF), i, copy);
+            storeByteInPixels((byte) ((payload.length >> shift) & 0xFF), i, stegoImage);
         }
 
         for (int i = 0; i < payload.length; i++) {
-            storeByteInPixels(payload[i], HEADER_BYTES + i, copy);
+            storeByteInPixels(payload[i], HEADER_BYTES + i, stegoImage);
         }
 
-        storeByteInPixels(checksum(payload), HEADER_BYTES + payload.length, copy);
+        storeByteInPixels(checksum(payload), HEADER_BYTES + payload.length, stegoImage);
 
-        return copy;
+        return stegoImage;
     }
 
+    // Extracts hidden data from a stego image.
     @Override
-    public byte[] extract(BufferedImage base) {
-        int maxPayload = (base.getWidth() * base.getHeight() * 3) / 8
-                         - HEADER_BYTES - CHECKSUM_BYTES;
-        if (maxPayload < 0) {
+    public byte[] extract(BufferedImage stegoImage) {
+        int maxLen = (stegoImage.getWidth() * stegoImage.getHeight() * 3) / 8
+                     - HEADER_BYTES - CHECKSUM_BYTES;
+        if (maxLen < 0) {
             throw new IllegalArgumentException("Image is too small to contain hidden data");
         }
 
-        // Read the 4-byte header back into an int, reversing the big-endian split
-        int size = 0;
+        //Reassemble the 4-byte big-endian header into an int
+        int dataLen = 0;
         for (int i = 0; i < HEADER_BYTES; i++) {
-            size = (size << 8) | (0xFF & readByteFromPixels(i, base));
+            dataLen = (dataLen << 8) | (0xFF & readByteFromPixels(i, stegoImage));
         }
 
-        if (size < 0 || size > maxPayload) {
+        if (dataLen < 0 || dataLen > maxLen) {
             throw new IllegalStateException(
-                    "No valid hidden data found in this image (decoded length: " + size + ")");
+                    "No valid hidden data found (decoded length: " + dataLen + ")");
         }
 
-        byte[] result = new byte[size];
-        for (int i = 0; i < size; i++) {
-            result[i] = readByteFromPixels(HEADER_BYTES + i, base);
+        byte[] payload = new byte[dataLen];
+        for (int i = 0; i < dataLen; i++) {
+            payload[i] = readByteFromPixels(HEADER_BYTES + i, stegoImage);
         }
 
-        byte computed       = checksum(result);
-        byte storedChecksum = readByteFromPixels(HEADER_BYTES + size, base);
-        if (computed != storedChecksum) {
-            throw new RuntimeException("Checksum mismatch: data may be corrupted");
+        //Verify integrity
+        byte computed = checksum(payload);
+        byte stored   = readByteFromPixels(HEADER_BYTES + dataLen, stegoImage);
+        if (computed != stored) {
+            throw new IllegalStateException("Checksum mismatch: data may be corrupted");
         }
 
-        return result;
+        return payload;
     }
 }
