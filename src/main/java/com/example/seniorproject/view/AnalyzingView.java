@@ -1,6 +1,5 @@
 package com.example.seniorproject.view;
 
-import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
 import javafx.geometry.Insets;
@@ -12,12 +11,11 @@ import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
-import javafx.scene.image.WritableImage;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 
-// Pane for analyzing which pixels were modified
-public class AnalyzingView {
+//Builds the UI layout for the Analyze tab
+public class AnalyzingView extends BaseView {
     private static final int IMAGE_SIZE = 200;
 
     private final VBox root;
@@ -29,17 +27,14 @@ public class AnalyzingView {
     private final Button analyzeButton;
     private final Button clearButton;
 
-    // Row with default values
     private VBox activeRow;
-
     private ImageView activeOriginalView;
     private ImageView activeStegoView;
-    private ImageView activeLsbAttackView;
+    private ImageView activeLsbXrayView;
     private ImageView activeHeatmapView;
-
     private Label activeOriginalLabel;
     private Label activeStegoLabel;
-    private Label activeLsbAttackLabel;
+    private Label activeLsbXrayLabel;
     private Label activeHeatmapLabel;
 
     public Node getNode() {
@@ -47,49 +42,43 @@ public class AnalyzingView {
     }
 
     public AnalyzingView() {
-        // Buttons for the pane
         chooseOriginalButton = new Button("Choose original image");
-
         chooseStegoButton = new Button("Choose stego image");
-
         analyzeButton = new Button("Analyze");
-
-        // Clear button that will reset the pane with the default row only
         clearButton = new Button("Clear");
 
-        // Row/Column where the buttons/images are positions 
         HBox controlsRow = new HBox(10, chooseOriginalButton, chooseStegoButton, analyzeButton, clearButton);
         controlsRow.setPadding(new Insets(10));
         VBox column = new VBox(10, controlsRow, imageArea);
         column.setPadding(new Insets(10));
 
-        // ScrollPane so the user can go through a list of images
+        //ScrollPane lets the user scroll through multiple analysis rows
         ScrollPane scrollPane = new ScrollPane(column);
         scrollPane.setFitToWidth(true);
-        root = new VBox(scrollPane); //container
+        root = new VBox(scrollPane);
         addDefaultRow();
     }
 
-    // Default row with default images
+    //Creates a fresh row with placeholder images for the next analysis
     public void addDefaultRow() {
         Image def = loadDefaultImage();
         activeOriginalLabel  = new Label("Original");
-        activeOriginalView   = createImageView(def);
+        activeOriginalView   = createImageView(def, IMAGE_SIZE);
         makeZoomable(activeOriginalView, activeOriginalLabel);
         VBox originalCol     = new VBox(5, activeOriginalLabel,  activeOriginalView);
 
         activeStegoLabel     = new Label("Stego");
-        activeStegoView      = createImageView(def);
+        activeStegoView      = createImageView(def, IMAGE_SIZE);
         makeZoomable(activeStegoView, activeStegoLabel);
         VBox stegoCol        = new VBox(5, activeStegoLabel,     activeStegoView);
 
-        activeLsbAttackLabel = new Label("LSB Attack");
-        activeLsbAttackView  = createImageView(def);
-        makeZoomable(activeLsbAttackView, activeLsbAttackLabel);
-        VBox lsbCol          = new VBox(5, activeLsbAttackLabel, activeLsbAttackView);
+        activeLsbXrayLabel   = new Label("LSB X-ray");
+        activeLsbXrayView    = createImageView(def, IMAGE_SIZE);
+        makeZoomable(activeLsbXrayView, activeLsbXrayLabel);
+        VBox lsbCol          = new VBox(5, activeLsbXrayLabel,   activeLsbXrayView);
 
         activeHeatmapLabel   = new Label("Difference heatmap");
-        activeHeatmapView    = createImageView(def);
+        activeHeatmapView    = createImageView(def, IMAGE_SIZE);
         makeZoomable(activeHeatmapView, activeHeatmapLabel);
         VBox heatmapCol      = new VBox(5, activeHeatmapLabel,   activeHeatmapView);
 
@@ -100,7 +89,7 @@ public class AnalyzingView {
         imageArea.getChildren().add(activeRow);
     }
 
-    // Open the images in full-size 
+    //Opens a full-size preview of the image in a dialog
     private static void makeZoomable(ImageView view, Label titleLabel) {
         view.setOnMouseClicked(e -> {
             Image img = view.getImage();
@@ -117,20 +106,6 @@ public class AnalyzingView {
         });
     }
 
-    private ImageView createImageView(Image image) {
-        ImageView view = new ImageView(image);
-        view.setFitWidth(IMAGE_SIZE);
-        view.setFitHeight(IMAGE_SIZE);
-        view.setPreserveRatio(true);
-        return view;
-    }
-
-    public Image loadDefaultImage() {
-        InputStream stream = getClass().getResourceAsStream("/com/example/seniorproject/img.png");
-        if (stream != null) return new Image(stream);
-        return new WritableImage(1, 1);
-    }
-
     public VBox getRoot() { return root; }
     public VBox getImageArea() { return imageArea; }
     public List<Node> getImageRows() { return imageRows; }
@@ -141,10 +116,10 @@ public class AnalyzingView {
     public VBox getActiveRow() { return activeRow; }
     public ImageView getActiveOriginalView() { return activeOriginalView; }
     public ImageView getActiveStegoView() { return activeStegoView; }
-    public ImageView getActiveLsbAttackView() { return activeLsbAttackView; }
+    public ImageView getActiveLsbXrayView() { return activeLsbXrayView; }
     public ImageView getActiveHeatmapView() { return activeHeatmapView; }
     public Label getActiveOriginalLabel() { return activeOriginalLabel; }
     public Label getActiveStegoLabel() { return activeStegoLabel; }
-    public Label getActiveLsbAttackLabel() { return activeLsbAttackLabel; }
+    public Label getActiveLsbXrayLabel() { return activeLsbXrayLabel; }
     public Label getActiveHeatmapLabel() { return activeHeatmapLabel; }
 }
