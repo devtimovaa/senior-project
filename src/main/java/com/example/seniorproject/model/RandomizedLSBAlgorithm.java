@@ -1,6 +1,5 @@
 package com.example.seniorproject.model;
 
-
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -11,20 +10,26 @@ import static com.example.seniorproject.model.LSBMethods.checksum;
 import static com.example.seniorproject.model.LSBMethods.readByteFromPixels;
 import static com.example.seniorproject.model.LSBMethods.storeByteInPixels;
 
+/*
+ Randomized LSB steganography.
+ Unlike the sequential LSB algorithm, byte slots are shuffled using a key so the hidden data is scattered across the image.
+ Without the correct key, the data cannot be recovered.
+*/
 
+//Magic bytes are used to check if the key is the correct one
 public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
     private static final byte MAGIC_0 = (byte) 0xAB;
     private static final byte MAGIC_1 = (byte) 0xCD;
-    
-    private static final int  MAGIC_BYTES    = 2;
-    private static final int  HEADER_BYTES   = 4;
+
+    private static final int  MAGIC_BYTES = 2;
+    private static final int  HEADER_BYTES = 4;
     private static final int  CHECKSUM_BYTES = 1;
 
-    private final int seed;
+    private final int key;
 
-    public RandomizedLSBAlgorithm(int seed) {
-        this.seed = seed;
+    public RandomizedLSBAlgorithm(int key) {
+        this.key = key;
     }
 
     @Override
@@ -35,9 +40,10 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
         int slotsNeeded = MAGIC_BYTES + HEADER_BYTES + payload.length + CHECKSUM_BYTES;
         if (slotsNeeded > order.size()) {
-            throw new IllegalArgumentException("Image is too small to embed this message");
+            throw new IllegalArgumentException("The image is too small to embed this message");
         }
 
+        //Work on a copy so the cover image stays untouched
         int w = coverImage.getWidth();
         int h = coverImage.getHeight();
         BufferedImage stegoImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
@@ -45,10 +51,11 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
         int slot = 0;
 
+        //Magic bytes let us detect if a message exists during extraction
         storeByteInPixels(MAGIC_0, order.get(slot++), stegoImage);
         storeByteInPixels(MAGIC_1, order.get(slot++), stegoImage);
 
-        // Payload length split into 4 bytes, big-endian
+        //Payload length is split into 4 bytes, big-endian
         for (int i = 0; i < HEADER_BYTES; i++) {
             int shift = 24 - 8 * i;
             storeByteInPixels((byte) ((payload.length >> shift) & 0xFF), order.get(slot++), stegoImage);
@@ -69,13 +76,14 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
         int slot = 0;
 
+        //If magic bytes don't match, either no data or wrong key
         byte m0 = readByteFromPixels(order.get(slot++), stegoImage);
         byte m1 = readByteFromPixels(order.get(slot++), stegoImage);
         if (m0 != MAGIC_0 || m1 != MAGIC_1) {
             throw new IllegalStateException("No hidden message found in this image");
         }
 
-        // Reassemble the 4-byte big-endian header into an int
+        //Reassemble the 4-byte big-endian header into an int
         int dataLen = 0;
         for (int i = 0; i < HEADER_BYTES; i++) {
             dataLen = (dataLen << 8) | (0xFF & readByteFromPixels(order.get(slot++), stegoImage));
@@ -83,7 +91,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
         int maxLen = order.size() - MAGIC_BYTES - HEADER_BYTES - CHECKSUM_BYTES;
         if (dataLen < 0 || dataLen > maxLen) {
-            throw new IllegalStateException("Could not read message - did you use the right seed?");
+            throw new IllegalStateException("Could not read message - did you use the right key?");
         }
 
         byte[] payload = new byte[dataLen];
@@ -91,30 +99,26 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
             payload[i] = readByteFromPixels(order.get(slot++), stegoImage);
         }
 
-        // Verify integrity
+        //Verify integrity
         byte computed = checksum(payload);
         byte stored   = readByteFromPixels(order.get(slot), stegoImage);
         if (computed != stored) {
-            throw new IllegalStateException("Checksum mismatch: data may be corrupted or wrong seed used");
+            throw new IllegalStateException("Checksum mismatch: data may be corrupted or wrong key used");
         }
 
         return payload;
     }
 
-    /*
-    Each image has 3 colour channels (R, G, B)
-    The total number of bits available is width × height × 3, and dividing by 8 gives the number of byte slots.
-     */
+    //Builds a shuffled list for the given image - the  same key always produces the same order
     private List<Integer> getShuffledOrder(BufferedImage image) {
-
         int totalSlots = (image.getWidth() * image.getHeight() * 3) / 8;
-        List<Integer> order = new ArrayList<>();
+        List<Integer> order = new ArrayList<>(totalSlots);
 
         for (int i = 0; i < totalSlots; i++) {
             order.add(i);
         }
 
-        Collections.shuffle(order, new Random(seed)); // rearranges using new Random(seed)
+        Collections.shuffle(order, new Random(key));
         return order;
     }
 }
