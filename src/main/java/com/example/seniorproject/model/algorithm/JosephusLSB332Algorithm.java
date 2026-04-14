@@ -5,10 +5,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static com.example.seniorproject.model.algorithm.LSBMethods.checksum;
+import static com.example.seniorproject.model.algorithm.LSBMethods.copyImage;
 
 /*
  Josephus-permutation LSB steganography with 3-3-2 bit encoding
- Pixel locations are chosen via a chaotic logistic map (r=3.87) combined with  a Josephus elimination scheme
+ Pixel locations are chosen via a chaotic logistic map (r=3.87) combined with a Josephus elimination scheme
  Each pixel stores a full byte: 3 bits in Red, 3 in Green, 2 in Blue
 */
 
@@ -42,11 +43,7 @@ public class JosephusLSB332Algorithm implements SteganographyAlgorithm {
         List<Integer> availablePixels = buildPixelPool(pixelCount);
         double[] chaos = initChaoticState();
 
-        //Work on a copy so the cover image stays untouched
-        int w = coverImage.getWidth();
-        int h = coverImage.getHeight();
-        BufferedImage stegoImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        stegoImage.setRGB(0, 0, w, h, coverImage.getRGB(0, 0, w, h, null, 0, w), 0, w);
+        BufferedImage stegoImage = copyImage(coverImage);
 
         //Magic bytes let us verify the correct key was used during extraction
         embedByte332(MAGIC_0, nextLocation(availablePixels, chaos), stegoImage);
@@ -125,7 +122,7 @@ public class JosephusLSB332Algorithm implements SteganographyAlgorithm {
         return chaos;
     }
 
-    //Josephus elimination priciple is that it picks a pixel from the pool using the chaotic value, then swap-removes it so it can't be chosen again
+    //Josephus elimination principle is that it picks a pixel from the pool using the chaotic value, then swap-removes it so it can't be chosen again
     private int nextLocation(List<Integer> availablePixels, double[] chaos) {
         chaos[0] = GROWTH_RATE * chaos[0] * (1 - chaos[0]);
         int position = Math.floorMod((int) (chaos[0] * 100_000_000), availablePixels.size());

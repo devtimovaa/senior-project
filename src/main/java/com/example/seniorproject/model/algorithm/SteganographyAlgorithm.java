@@ -2,6 +2,7 @@ package com.example.seniorproject.model.algorithm;
 
 import java.awt.image.BufferedImage;
 
+//Common contract for all steganography algorithms
 public interface SteganographyAlgorithm {
 
     BufferedImage embed(BufferedImage coverImage, byte[] secret);

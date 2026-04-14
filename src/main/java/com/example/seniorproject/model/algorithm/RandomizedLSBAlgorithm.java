@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Random;
 
 import static com.example.seniorproject.model.algorithm.LSBMethods.checksum;
+import static com.example.seniorproject.model.algorithm.LSBMethods.copyImage;
 import static com.example.seniorproject.model.algorithm.LSBMethods.readByteFromPixels;
 import static com.example.seniorproject.model.algorithm.LSBMethods.storeByteInPixels;
 
@@ -31,6 +32,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
         this.key = key;
     }
 
+    //Embeds secret data at shuffled byte positions so it is scattered across the image
     @Override
     public BufferedImage embed(BufferedImage coverImage, byte[] secret) {
         byte[] payload = secret == null ? new byte[0] : secret;
@@ -42,11 +44,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
             throw new IllegalArgumentException("The image is too small to embed this message");
         }
 
-        //Work on a copy so the cover image stays untouched
-        int w = coverImage.getWidth();
-        int h = coverImage.getHeight();
-        BufferedImage stegoImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        stegoImage.setRGB(0, 0, w, h, coverImage.getRGB(0, 0, w, h, null, 0, w), 0, w);
+        BufferedImage stegoImage = copyImage(coverImage);
 
         int slot = 0;
 
@@ -69,6 +67,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
         return stegoImage;
     }
 
+    //Extracts hidden data by regenerating the same shuffled order from the key
     @Override
     public byte[] extract(BufferedImage stegoImage) {
         List<Integer> order = getShuffledOrder(stegoImage);
@@ -108,7 +107,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
         return payload;
     }
 
-    //Builds a shuffled list for the given image - the  same key always produces the same order
+    //Builds a shuffled list for the given image - the same key always produces the same order
     private List<Integer> getShuffledOrder(BufferedImage image) {
         int totalSlots = (image.getWidth() * image.getHeight() * 3) / 8;
         List<Integer> order = new ArrayList<>(totalSlots);

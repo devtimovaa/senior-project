@@ -3,12 +3,13 @@ package com.example.seniorproject.model.algorithm;
 import java.awt.image.BufferedImage;
 
 import static com.example.seniorproject.model.algorithm.LSBMethods.checksum;
+import static com.example.seniorproject.model.algorithm.LSBMethods.copyImage;
 import static com.example.seniorproject.model.algorithm.LSBMethods.readByteFromPixels;
 import static com.example.seniorproject.model.algorithm.LSBMethods.storeByteInPixels;
 
 /* 
  Sequential LSB (Least Significant Bit) steganography
- This algoritm hides data by replacing the least significant bit of each RGB channel in consecutive pixels.
+ This algorithm hides data by replacing the least significant bit of each RGB channel in consecutive pixels.
 */
 public class LSBAlgorithm implements SteganographyAlgorithm {
 
@@ -28,11 +29,7 @@ public class LSBAlgorithm implements SteganographyAlgorithm {
                     "Image too small: need " + bitsNeeded + " bits, have " + bitsAvailable);
         }
 
-        //Work on a copy so the original image stays untouched
-        int w = coverImage.getWidth();
-        int h = coverImage.getHeight();
-        BufferedImage stegoImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        stegoImage.setRGB(0, 0, w, h, coverImage.getRGB(0, 0, w, h, null, 0, w), 0, w);
+        BufferedImage stegoImage = copyImage(coverImage);
 
         //Split payload length into 4 bytes (big-endian) and store sequentially
         for (int i = 0; i < HEADER_BYTES; i++) {
@@ -49,7 +46,7 @@ public class LSBAlgorithm implements SteganographyAlgorithm {
         return stegoImage;
     }
 
-    // Extracts hidden data from a stego image.
+    //Extracts hidden data from a stego image.
     @Override
     public byte[] extract(BufferedImage stegoImage) {
         int maxLen = (stegoImage.getWidth() * stegoImage.getHeight() * 3) / 8
