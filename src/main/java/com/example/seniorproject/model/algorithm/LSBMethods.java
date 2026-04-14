@@ -1,4 +1,4 @@
-package com.example.seniorproject.model;
+package com.example.seniorproject.model.algorithm;
 
 import java.awt.image.BufferedImage;
 

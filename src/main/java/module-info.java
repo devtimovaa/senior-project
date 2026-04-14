@@ -8,6 +8,10 @@ module com.example.seniorproject {
 
     opens com.example.seniorproject to javafx.fxml;
     exports com.example.seniorproject;
-    exports com.example.seniorproject.algorithms;
-    opens com.example.seniorproject.algorithms to javafx.fxml;
+    exports com.example.seniorproject.model;
+    exports com.example.seniorproject.model.algorithm;
+    opens com.example.seniorproject.model to javafx.fxml;
+    opens com.example.seniorproject.model.algorithm to javafx.fxml;
+    opens com.example.seniorproject.view to javafx.fxml;
+    opens com.example.seniorproject.controller to javafx.fxml;
 }

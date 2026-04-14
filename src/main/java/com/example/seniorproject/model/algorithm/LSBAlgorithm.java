@@ -1,10 +1,10 @@
-package com.example.seniorproject.model;
+package com.example.seniorproject.model.algorithm;
 
 import java.awt.image.BufferedImage;
 
-import static com.example.seniorproject.model.LSBMethods.checksum;
-import static com.example.seniorproject.model.LSBMethods.readByteFromPixels;
-import static com.example.seniorproject.model.LSBMethods.storeByteInPixels;
+import static com.example.seniorproject.model.algorithm.LSBMethods.checksum;
+import static com.example.seniorproject.model.algorithm.LSBMethods.readByteFromPixels;
+import static com.example.seniorproject.model.algorithm.LSBMethods.storeByteInPixels;
 
 /* 
  Sequential LSB (Least Significant Bit) steganography
@@ -21,7 +21,7 @@ public class LSBAlgorithm implements SteganographyAlgorithm {
         byte[] payload = secret == null ? new byte[0] : secret;
 
         //Each pixel has 3 color channels (R, G, B) and each provides 1 usable bit
-        int bitsNeeded    = (HEADER_BYTES + payload.length + CHECKSUM_BYTES) * 8;
+        int bitsNeeded = (HEADER_BYTES + payload.length + CHECKSUM_BYTES) * 8;
         int bitsAvailable = coverImage.getWidth() * coverImage.getHeight() * 3;
         if (bitsNeeded > bitsAvailable) {
             throw new IllegalArgumentException(
@@ -76,7 +76,7 @@ public class LSBAlgorithm implements SteganographyAlgorithm {
 
         //Verify integrity
         byte computed = checksum(payload);
-        byte stored   = readByteFromPixels(HEADER_BYTES + dataLen, stegoImage);
+        byte stored = readByteFromPixels(HEADER_BYTES + dataLen, stegoImage);
         if (computed != stored) {
             throw new IllegalStateException("Checksum mismatch: data may be corrupted");
         }

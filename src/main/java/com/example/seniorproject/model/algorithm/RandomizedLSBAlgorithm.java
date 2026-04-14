@@ -1,4 +1,4 @@
-package com.example.seniorproject.model;
+package com.example.seniorproject.model.algorithm;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
@@ -6,9 +6,9 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
-import static com.example.seniorproject.model.LSBMethods.checksum;
-import static com.example.seniorproject.model.LSBMethods.readByteFromPixels;
-import static com.example.seniorproject.model.LSBMethods.storeByteInPixels;
+import static com.example.seniorproject.model.algorithm.LSBMethods.checksum;
+import static com.example.seniorproject.model.algorithm.LSBMethods.readByteFromPixels;
+import static com.example.seniorproject.model.algorithm.LSBMethods.storeByteInPixels;
 
 /*
  Randomized LSB steganography.
@@ -21,10 +21,9 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
     private static final byte MAGIC_0 = (byte) 0xAB;
     private static final byte MAGIC_1 = (byte) 0xCD;
-
-    private static final int  MAGIC_BYTES = 2;
-    private static final int  HEADER_BYTES = 4;
-    private static final int  CHECKSUM_BYTES = 1;
+    private static final int MAGIC_BYTES = 2;
+    private static final int HEADER_BYTES = 4;
+    private static final int CHECKSUM_BYTES = 1;
 
     private final int key;
 
@@ -101,7 +100,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
         //Verify integrity
         byte computed = checksum(payload);
-        byte stored   = readByteFromPixels(order.get(slot), stegoImage);
+        byte stored = readByteFromPixels(order.get(slot), stegoImage);
         if (computed != stored) {
             throw new IllegalStateException("Checksum mismatch: data may be corrupted or wrong key used");
         }

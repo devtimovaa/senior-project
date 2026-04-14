@@ -1,5 +1,9 @@
 package com.example.seniorproject.model;
 
+import com.example.seniorproject.model.algorithm.JosephusLSB332Algorithm;
+import com.example.seniorproject.model.algorithm.LSBAlgorithm;
+import com.example.seniorproject.model.algorithm.RandomizedLSBAlgorithm;
+
 import java.awt.image.BufferedImage;
 
 public class EmbeddingModel {

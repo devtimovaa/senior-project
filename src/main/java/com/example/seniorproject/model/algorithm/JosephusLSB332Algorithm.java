@@ -1,10 +1,10 @@
-package com.example.seniorproject.model;
+package com.example.seniorproject.model.algorithm;
 
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
 
-import static com.example.seniorproject.model.LSBMethods.checksum;
+import static com.example.seniorproject.model.algorithm.LSBMethods.checksum;
 
 /*
  Josephus-permutation LSB steganography with 3-3-2 bit encoding
@@ -116,7 +116,7 @@ public class JosephusLSB332Algorithm implements SteganographyAlgorithm {
         return pool;
     }
 
-    //Initialises and iterates the logistic map 100 times
+    //Initialise and iterate the logistic map 100 times
     private double[] initChaoticState() {
         double[] chaos = {(key % 9999 + 1)/10000.0 };
         for (int i = 0; i < 100; i++) {
@@ -129,7 +129,7 @@ public class JosephusLSB332Algorithm implements SteganographyAlgorithm {
     private int nextLocation(List<Integer> availablePixels, double[] chaos) {
         chaos[0] = GROWTH_RATE * chaos[0] * (1 - chaos[0]);
         int position = Math.floorMod((int) (chaos[0] * 100_000_000), availablePixels.size());
-        int lastIndex  = availablePixels.size() - 1;
+        int lastIndex = availablePixels.size() - 1;
         int pixelIndex = availablePixels.get(position);
         availablePixels.set(position, availablePixels.get(lastIndex));
         availablePixels.remove(lastIndex);
@@ -155,7 +155,7 @@ public class JosephusLSB332Algorithm implements SteganographyAlgorithm {
         img.setRGB(x, y, (alpha << 24) | (red << 16) | (green << 8) | blue);
     }
 
-    //Reads back the byte from a single pixel 
+    //Read back the byte from a single pixel 
     private byte extractByte332(int pixelIndex, BufferedImage img) {
         int x = pixelIndex % img.getWidth();
         int y = pixelIndex / img.getWidth();
@@ -166,5 +166,4 @@ public class JosephusLSB332Algorithm implements SteganographyAlgorithm {
 
         return (byte) (((red & 0x07) << 5) | ((green & 0x07) << 2) | (blue & 0x03));
     }
-
 }
