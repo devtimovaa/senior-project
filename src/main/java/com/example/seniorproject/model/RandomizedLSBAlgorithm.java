@@ -7,6 +7,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
+import static com.example.seniorproject.model.LSBMethods.checksum;
 import static com.example.seniorproject.model.LSBMethods.readByteFromPixels;
 import static com.example.seniorproject.model.LSBMethods.storeByteInPixels;
 
@@ -15,6 +16,10 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
 
     private static final byte MAGIC_0 = (byte) 0xAB;
     private static final byte MAGIC_1 = (byte) 0xCD;
+    
+    private static final int  MAGIC_BYTES    = 2;
+    private static final int  HEADER_BYTES   = 4;
+    private static final int  CHECKSUM_BYTES = 1;
 
     private final int seed;
 
@@ -23,97 +28,77 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
     }
 
     @Override
-    public BufferedImage embed(BufferedImage base, byte[] data) {
-        if (data == null) {
-            data = new byte[0];
-        }
+    public BufferedImage embed(BufferedImage coverImage, byte[] secret) {
+        byte[] payload = secret == null ? new byte[0] : secret;
 
-        List<Integer> order = getShuffledOrder(base);
+        List<Integer> order = getShuffledOrder(coverImage);
 
-        // Checks if image is large enough
-        int slotsNeeded = 2 + 4 + data.length + 1;
+        int slotsNeeded = MAGIC_BYTES + HEADER_BYTES + payload.length + CHECKSUM_BYTES;
         if (slotsNeeded > order.size()) {
             throw new IllegalArgumentException("Image is too small to embed this message");
         }
 
-        // Makes a copy of the image so the original is never touched
-        int w = base.getWidth();
-        int h = base.getHeight();
-        BufferedImage copyImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        copyImage.setRGB(0, 0, w, h, base.getRGB(0, 0, w, h, null, 0, w), 0, w);
+        int w = coverImage.getWidth();
+        int h = coverImage.getHeight();
+        BufferedImage stegoImage = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        stegoImage.setRGB(0, 0, w, h, coverImage.getRGB(0, 0, w, h, null, 0, w), 0, w);
 
         int slot = 0;
 
-        // We will use magic bytes so we can detect if a message exists
-        storeByteInPixels(MAGIC_0, order.get(slot++), copyImage);
-        storeByteInPixels(MAGIC_1, order.get(slot++), copyImage);
+        storeByteInPixels(MAGIC_0, order.get(slot++), stegoImage);
+        storeByteInPixels(MAGIC_1, order.get(slot++), stegoImage);
 
-        // Write the length as 4 bytes becausea single byte can hold 0-255
-        storeByteInPixels((byte) ((data.length >> 24) & 0xFF), order.get(slot++), copyImage);
-        storeByteInPixels((byte) ((data.length >> 16) & 0xFF), order.get(slot++), copyImage);
-        storeByteInPixels((byte) ((data.length >>  8) & 0xFF), order.get(slot++), copyImage);
-        storeByteInPixels((byte)  (data.length        & 0xFF), order.get(slot++), copyImage);
-
-        // Byte of message is written to the image
-        for (byte b : data) {
-            storeByteInPixels(b, order.get(slot++), copyImage);
+        // Payload length split into 4 bytes, big-endian
+        for (int i = 0; i < HEADER_BYTES; i++) {
+            int shift = 24 - 8 * i;
+            storeByteInPixels((byte) ((payload.length >> shift) & 0xFF), order.get(slot++), stegoImage);
         }
 
-        storeByteInPixels(checksum(data), order.get(slot), copyImage);
+        for (byte b : payload) {
+            storeByteInPixels(b, order.get(slot++), stegoImage);
+        }
 
-        return copyImage;
+        storeByteInPixels(checksum(payload), order.get(slot), stegoImage);
+
+        return stegoImage;
     }
 
     @Override
-    public byte[] extract(BufferedImage base) {
-        List<Integer> order = getShuffledOrder(base);
+    public byte[] extract(BufferedImage stegoImage) {
+        List<Integer> order = getShuffledOrder(stegoImage);
 
         int slot = 0;
 
-        // Check magic bytes
-        byte m0 = readByteFromPixels(order.get(slot++), base);
-        byte m1 = readByteFromPixels(order.get(slot++), base);
-
+        byte m0 = readByteFromPixels(order.get(slot++), stegoImage);
+        byte m1 = readByteFromPixels(order.get(slot++), stegoImage);
         if (m0 != MAGIC_0 || m1 != MAGIC_1) {
             throw new IllegalStateException("No hidden message found in this image");
         }
 
-        // The reverse of the bit-shifting done during embed
-        byte b1 = readByteFromPixels(order.get(slot++), base);
-        byte b2 = readByteFromPixels(order.get(slot++), base);
-        byte b3 = readByteFromPixels(order.get(slot++), base);
-        byte b4 = readByteFromPixels(order.get(slot++), base);
+        // Reassemble the 4-byte big-endian header into an int
+        int dataLen = 0;
+        for (int i = 0; i < HEADER_BYTES; i++) {
+            dataLen = (dataLen << 8) | (0xFF & readByteFromPixels(order.get(slot++), stegoImage));
+        }
 
-        int size = ((0xFF & b1) << 24) | ((0xFF & b2) << 16)
-                 | ((0xFF & b3) <<  8) |  (0xFF & b4);
-
-        int maxSize = order.size() - 2 - 4 - 1;
-        if (size < 0 || size > maxSize) {
+        int maxLen = order.size() - MAGIC_BYTES - HEADER_BYTES - CHECKSUM_BYTES;
+        if (dataLen < 0 || dataLen > maxLen) {
             throw new IllegalStateException("Could not read message - did you use the right seed?");
         }
 
-        // Read each byte of the message
-        byte[] result = new byte[size];
-        for (int i = 0; i < size; i++) {
-            result[i] = readByteFromPixels(order.get(slot++), base);
+        byte[] payload = new byte[dataLen];
+        for (int i = 0; i < dataLen; i++) {
+            payload[i] = readByteFromPixels(order.get(slot++), stegoImage);
         }
 
-       
-        byte storedChecksum = readByteFromPixels(order.get(slot), base);
-        if (checksum(result) != storedChecksum) {
-            throw new RuntimeException("Checksum mismatch - message may be corrupted or wrong seed used");
+        // Verify integrity
+        byte computed = checksum(payload);
+        byte stored   = readByteFromPixels(order.get(slot), stegoImage);
+        if (computed != stored) {
+            throw new IllegalStateException("Checksum mismatch: data may be corrupted or wrong seed used");
         }
 
-        return result;
-    }
-
-    // X0R of all bytes
-    private static byte checksum(byte[] data) {
-        byte xor = 0;
-        for (byte b : data) {
-            xor ^= b;
-        }
-        return xor;
+        return payload;
     }
 
     /*
