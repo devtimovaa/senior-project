@@ -14,7 +14,8 @@ import javafx.scene.image.Image;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
-public class AnalyzingController {
+//Handles user interaction for the Analyze tab
+public class AnalyzingController extends BaseController {
     private final AnalyzingModel model;
     private final AnalyzingView view;
     private File selectedStegoFile;
@@ -34,16 +35,9 @@ public class AnalyzingController {
         view.getChooseOriginalButton().setOnAction(event -> openOriginalChooser());
         view.getChooseStegoButton().setOnAction(event -> openStegoChooser());
         view.getAnalyzeButton().setOnAction(event -> handleAnalyze());
-        view.getClearButton().setOnAction(event -> {
-            view.getImageArea().getChildren().removeAll(view.getImageRows());
-            view.getImageRows().clear();
-            selectedStegoFile = null;
-            selectedOriginalFile = null;
-            view.addDefaultRow();
-        });
+        view.getClearButton().setOnAction(event -> handleClear());
     }
 
-    //Choose original image
     private void openOriginalChooser() {
         File file = openPngChooser();
         if (file != null) {
@@ -53,7 +47,6 @@ public class AnalyzingController {
         }
     }
 
-    // Choose stego image
     private void openStegoChooser() {
         File file = openPngChooser();
         if (file != null) {
@@ -63,7 +56,7 @@ public class AnalyzingController {
         }
     }
 
-    // Open screen for the user to choose an image
+    //Opens a file chooser filtered to PNG images
     private File openPngChooser() {
         FileChooser fc = new FileChooser();
         fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("Image Files", "*.png"));
@@ -72,9 +65,8 @@ public class AnalyzingController {
         return fc.showOpenDialog(window);
     }
 
-    // Analyze the image
+    //Runs the analysis
     private void handleAnalyze() {
-        // Error handling
         if (selectedStegoFile == null) {
             showAlert(Alert.AlertType.WARNING, "Stego Image Missing", "Please choose a stego image first.");
             return;
@@ -88,14 +80,14 @@ public class AnalyzingController {
 
             long startTime = System.nanoTime();
 
-            BufferedImage lsbSpec = model.lsbXraySpec(stego);
+            BufferedImage lsbXray = model.lsbXray(stego);
 
-            // Difference heatmap 
             BufferedImage heatmap = null;
             int modifiedPixels = 0;
-            double mse  = Double.NaN;
+            double mse = Double.NaN;
             double psnr = Double.NaN;
 
+            //Comparison metrics are only available when an original image is loaded
             if (selectedOriginalFile != null) {
                 BufferedImage original = ImageIO.read(selectedOriginalFile);
                 if (original == null) {
@@ -107,58 +99,67 @@ public class AnalyzingController {
                             "Original and stego images must be the same size for comparison.");
                     return;
                 }
-                int[] counts = new int[1];
-                heatmap = model.differenceHeatmap(original, stego, counts);
-                modifiedPixels = counts[0];
-                mse  = model.calculateMse(original, stego);
-                psnr = mse == 0 ? Double.POSITIVE_INFINITY : 10.0 * Math.log10(255.0 * 255.0 / mse);
+                AnalyzingModel.HeatmapResult result = model.differenceHeatmap(original, stego);
+                heatmap = result.image();
+                modifiedPixels = result.modifiedPixels();
+                mse = model.calculateMse(original, stego);
+                psnr = model.calculatePsnr(mse);
             }
 
             long elapsedMs = (System.nanoTime() - startTime) / 1_000_000;
-            long memoryBytes = (long) stego.getWidth() * stego.getHeight() * 3;
+            String stats = buildStatsText(stego, elapsedMs, heatmap != null, modifiedPixels, mse, psnr);
 
-            StringBuilder stats = new StringBuilder(String.format(
-                    "Size: %d × %d px  |  Time: %d ms  |  Memory: %s",
-                    stego.getWidth(), stego.getHeight(), elapsedMs, model.formatBytes(memoryBytes)));
+            updateView(lsbXray, heatmap, stats);
 
-            if (heatmap != null) {
-                int total = stego.getWidth() * stego.getHeight();
-                stats.append(String.format("  |  Modified pixels: %d / %d (%.2f%%)",
-                        modifiedPixels, total, 100.0 * modifiedPixels / total));
-                stats.append(String.format("  |  MSE: %.4f", mse));
-                String psnrStr = Double.isInfinite(psnr) ? "∞" : String.format("%.2f", psnr);
-                stats.append(String.format("  |  PSNR: %s dB", psnrStr));
-            }
-
-            // Update active row
-            view.getActiveLsbAttackView().setImage(SwingFXUtils.toFXImage(lsbSpec, null));
-            view.getActiveLsbAttackLabel().setText("LSB Attack");
-
-            if (heatmap != null) {
-                view.getActiveHeatmapView().setImage(SwingFXUtils.toFXImage(heatmap, null));
-                view.getActiveHeatmapLabel().setText("Difference heatmap");
-            } else {
-                view.getActiveHeatmapLabel().setText("Difference heatmap - load an original to enable");
-            }
-            view.getActiveRow().getChildren().add(new Label(stats.toString()));
-
-            // Reset
             selectedStegoFile = null;
             selectedOriginalFile = null;
             view.addDefaultRow();
 
-            // Error handling
         } catch (Exception ex) {
             showAlert(Alert.AlertType.ERROR, "Analysis Failed",
                     ex.getMessage() != null ? ex.getMessage() : "Unable to analyze the image.");
         }
     }
 
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
+    //Formats all analysis metrics into a single display string
+    private String buildStatsText(BufferedImage stego, long elapsedMs,
+                                  boolean hasComparison, int modifiedPixels,
+                                  double mse, double psnr) {
+        long imageDataBytes = (long) stego.getWidth() * stego.getHeight() * 3;
+        StringBuilder sb = new StringBuilder(String.format(
+                "Size: %d × %d px  |  Time: %d ms  |  Image data: %s",
+                stego.getWidth(), stego.getHeight(), elapsedMs, model.formatBytes(imageDataBytes)));
+
+        if (hasComparison) {
+            int total = stego.getWidth() * stego.getHeight();
+            sb.append(String.format("  |  Modified pixels: %d / %d (%.2f%%)",
+                    modifiedPixels, total, 100.0 * modifiedPixels / total));
+            sb.append(String.format("  |  MSE: %.4f", mse));
+            String psnrStr = Double.isInfinite(psnr) ? "∞" : String.format("%.2f", psnr);
+            sb.append(String.format("  |  PSNR: %s dB", psnrStr));
+        }
+        return sb.toString();
+    }
+
+    //Pushes analysis results into the active row
+    private void updateView(BufferedImage lsbXray, BufferedImage heatmap, String stats) {
+        view.getActiveLsbXrayView().setImage(SwingFXUtils.toFXImage(lsbXray, null));
+        view.getActiveLsbXrayLabel().setText("LSB X-ray");
+
+        if (heatmap != null) {
+            view.getActiveHeatmapView().setImage(SwingFXUtils.toFXImage(heatmap, null));
+            view.getActiveHeatmapLabel().setText("Difference heatmap");
+        } else {
+            view.getActiveHeatmapLabel().setText("Difference heatmap - load an original to enable");
+        }
+        view.getActiveRow().getChildren().add(new Label(stats));
+    }
+
+    private void handleClear() {
+        view.getImageArea().getChildren().removeAll(view.getImageRows());
+        view.getImageRows().clear();
+        selectedStegoFile = null;
+        selectedOriginalFile = null;
+        view.addDefaultRow();
     }
 }

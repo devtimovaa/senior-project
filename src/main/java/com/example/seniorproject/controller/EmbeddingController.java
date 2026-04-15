@@ -16,10 +16,11 @@ import javafx.scene.image.Image;
 import javafx.stage.FileChooser;
 import javafx.stage.Window;
 
-public class EmbeddingController {
+//Handles user interaction for the Embed tab
+public class EmbeddingController extends BaseController {
     private final EmbeddingModel model;
     private final EmbeddingView view;
-    private File selectedFile;
+    private File selectedCoverFile;
     private File selectedSecretFile;
 
     public EmbeddingController(EmbeddingModel model, EmbeddingView view) {
@@ -33,11 +34,12 @@ public class EmbeddingController {
     }
 
     private void initEventHandlers() {
-        view.getChooseImageButton().setOnAction(event -> openImageChooser());
+        view.getChooseImageButton().setOnAction(event -> openCoverChooser());
         view.getChooseSecretImageButton().setOnAction(event -> openSecretImageChooser());
         view.getSubmitButton().setOnAction(event -> handleSubmit());
         view.getClearButton().setOnAction(event -> handleClear());
 
+        //Text and image input depending on the secret type
         view.getSecretTypeChoice().getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
             boolean isImage = "Image".equals(newVal);
             view.getSecretTextLabel().setVisible(!isImage);
@@ -50,133 +52,122 @@ public class EmbeddingController {
             view.getSecretImageView().setManaged(isImage);
         });
 
+        //Only show the key field for algorithms that need one
         view.getAlgorithmChoice().getSelectionModel().selectedItemProperty().addListener((obs, oldVal, newVal) -> {
-            boolean needsSeed = "Randomized LSB".equals(newVal) || "Josephus LSB 3-3-2".equals(newVal);
-            view.getSeedBox().setVisible(needsSeed);
-            view.getSeedBox().setManaged(needsSeed);
+            boolean needsKey = "Randomized LSB".equals(newVal) || "Josephus LSB 3-3-2".equals(newVal);
+            view.getKeyBox().setVisible(needsKey);
+            view.getKeyBox().setManaged(needsKey);
         });
     }
 
-    // File chooser to select image
-    private void openImageChooser() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("Image Files", "*.png"));
-        Window window = view.getRoot().getScene() != null ? view.getRoot().getScene().getWindow() : null;
-        if (window == null) {
-            return;
-        }
-        File file = fileChooser.showOpenDialog(window);
+    private void openCoverChooser() {
+        File file = openFileChooser("Image Files", "*.png");
         if (file != null) {
-            selectedFile = file;
-            view.getBaseImageView().setImage(new Image(file.toURI().toString()));
+            selectedCoverFile = file;
+            view.getCoverImageView().setImage(new Image(file.toURI().toString()));
         }
     }
 
-    // File chooser to select the secret image
     private void openSecretImageChooser() {
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(
-                new FileChooser.ExtensionFilter("Image Files", "*.png", "*.jpg", "*.jpeg"));
-        Window window = view.getRoot().getScene() != null ? view.getRoot().getScene().getWindow() : null;
-        if (window == null) {
-            return;
-        }
-        File file = fileChooser.showOpenDialog(window);
+        File file = openFileChooser("Image Files", "*.png", "*.jpg", "*.jpeg");
         if (file != null) {
             selectedSecretFile = file;
             view.getSecretImageView().setImage(new Image(file.toURI().toString()));
         }
     }
 
-    // Submit button logic
-    private void handleSubmit() {
+    //Opens a file chooser with the given extension filter
+    private File openFileChooser(String description, String... extensions) {
+        FileChooser fc = new FileChooser();
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter(description, extensions));
+        Window window = view.getRoot().getScene() != null ? view.getRoot().getScene().getWindow() : null;
+        if (window == null) return null;
+        return fc.showOpenDialog(window);
+    }
 
-        // Validate all inputs before opening the save dialog
-        if (selectedFile == null) {
+    //Validates inputs, embeds the secret and saves the result
+    private void handleSubmit() {
+        if (selectedCoverFile == null) {
             showAlert(Alert.AlertType.WARNING, "Image Missing", "Please choose an image!");
             return;
         }
-        boolean hidingImage = "Image".equals(view.getSecretTypeChoice().getValue());
-        byte[] bytesToHide;
-        if (hidingImage) {
-            if (selectedSecretFile == null) {
-                showAlert(Alert.AlertType.WARNING, "Secret Image Missing", "Please choose a secret image to embed.");
-                return;
-            }
-            try {
-                BufferedImage secretBuffered = ImageIO.read(selectedSecretFile);
-                if (secretBuffered == null) {
-                    showAlert(Alert.AlertType.ERROR, "Image Error", "Could not read the secret image.");
-                    return;
-                }
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                ImageIO.write(secretBuffered, "png", baos);
-                bytesToHide = baos.toByteArray();
-            } catch (IOException e) {
-                showAlert(Alert.AlertType.ERROR, "Image Error", "Failed to encode secret image: " + e.getMessage());
-                return;
-            }
-        } else {
-            String secret = view.getSecretTextArea().getText();
-            if (secret == null || secret.isEmpty()) {
-                showAlert(Alert.AlertType.WARNING, "Message Missing", "Please enter a secret message to embed.");
-                return;
-            }
-            bytesToHide = secret.getBytes(StandardCharsets.UTF_8);
-        }
+
+        byte[] secret = prepareSecret();
+        if (secret == null) return;
+
         String algorithm = view.getAlgorithmChoice().getValue();
-        int seed = 0;
-        if ("Randomized LSB".equals(algorithm) || "Josephus LSB 3-3-2".equals(algorithm)) {
-            String seedText = view.getSeedField().getText();
-            if (seedText == null || seedText.isBlank()) {
-                showAlert(Alert.AlertType.ERROR, "Key Required", "Please enter an integer key.");
-                return;
-            }
-            try {
-                seed = Integer.parseInt(seedText.trim());
-            } catch (NumberFormatException e) {
-                showAlert(Alert.AlertType.ERROR, "Invalid Key", "The key must be an integer.");
-                return;
-            }
-        }
+        int key = parseKey(algorithm, view.getKeyField());
+        if (key == Integer.MIN_VALUE) return;
 
-        // Ask the user where to save the output (PNG only)
-        Window window = view.getRoot().getScene() != null ? view.getRoot().getScene().getWindow() : null;
-        FileChooser fileChooser = new FileChooser();
-        fileChooser.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG Image", "*.png"));
-        File outputFile = fileChooser.showSaveDialog(window);
-
-        if (outputFile == null) {
-            return;
-        }
-
-        if (!outputFile.getName().endsWith(".png")) {
-            outputFile = new File(outputFile.getAbsolutePath() + ".png");
-        }
+        File outputFile = openSaveDialog();
+        if (outputFile == null) return;
 
         try {
-            BufferedImage buffered = ImageIO.read(selectedFile);
-            if (buffered == null) {
+            BufferedImage coverImage = ImageIO.read(selectedCoverFile);
+            if (coverImage == null) {
                 showAlert(Alert.AlertType.ERROR, "Image Error", "Could not read the selected image.");
                 return;
             }
 
-            buffered = model.embed(buffered, bytesToHide, algorithm, seed);
+            BufferedImage stegoImage = model.embed(coverImage, secret, algorithm, key);
 
-            ImageIO.write(buffered, "png", outputFile);
-            view.getResultImageView().setImage(SwingFXUtils.toFXImage(buffered, null));
+            ImageIO.write(stegoImage, "png", outputFile);
+            view.getResultImageView().setImage(SwingFXUtils.toFXImage(stegoImage, null));
             view.getStatusLabel().setText("Saved: " + outputFile.getName());
         } catch (Exception ex) {
-            showAlert(Alert.AlertType.ERROR, "Embedding Failed", ex.getMessage() != null ? ex.getMessage() : "Unable to embed the message.");
+            showAlert(Alert.AlertType.ERROR, "Embedding Failed",
+                    ex.getMessage() != null ? ex.getMessage() : "Unable to embed the message.");
         }
+    }
+
+    //Converts the user's text or image input into the byte array
+    private byte[] prepareSecret() {
+        boolean hidingImage = "Image".equals(view.getSecretTypeChoice().getValue());
+        if (hidingImage) {
+            if (selectedSecretFile == null) {
+                showAlert(Alert.AlertType.WARNING, "Secret Image Missing", "Please choose a secret image to embed.");
+                return null;
+            }
+            try {
+                BufferedImage secretImage = ImageIO.read(selectedSecretFile);
+                if (secretImage == null) {
+                    showAlert(Alert.AlertType.ERROR, "Image Error", "Could not read the secret image.");
+                    return null;
+                }
+                ByteArrayOutputStream baos = new ByteArrayOutputStream();
+                ImageIO.write(secretImage, "png", baos);
+                return baos.toByteArray();
+            } catch (IOException e) {
+                showAlert(Alert.AlertType.ERROR, "Image Error", "Failed to encode secret image: " + e.getMessage());
+                return null;
+            }
+        } else {
+            String text = view.getSecretTextArea().getText();
+            if (text == null || text.isEmpty()) {
+                showAlert(Alert.AlertType.WARNING, "Message Missing", "Please enter a secret message to embed.");
+                return null;
+            }
+            return text.getBytes(StandardCharsets.UTF_8);
+        }
+    }
+
+    //Opens a save dialog for the output PNG
+    private File openSaveDialog() {
+        Window window = view.getRoot().getScene() != null ? view.getRoot().getScene().getWindow() : null;
+        FileChooser fc = new FileChooser();
+        fc.getExtensionFilters().add(new FileChooser.ExtensionFilter("PNG Image", "*.png"));
+        File file = fc.showSaveDialog(window);
+        if (file != null && !file.getName().endsWith(".png")) {
+            file = new File(file.getAbsolutePath() + ".png");
+        }
+        return file;
     }
 
     private void handleClear() {
         Image defaultImage = view.loadDefaultImage();
-        selectedFile = null;
+        selectedCoverFile = null;
         selectedSecretFile = null;
-        view.getBaseImageView().setImage(defaultImage);
+        view.getCoverImageView().setImage(defaultImage);
         view.getResultImageView().setImage(defaultImage);
         view.getSecretTextArea().clear();
         view.getSecretImageView().setImage(defaultImage);
@@ -184,15 +175,7 @@ public class EmbeddingController {
         view.getSecretImageView().setManaged(false);
         view.getSecretTypeChoice().getSelectionModel().selectFirst();
         view.getAlgorithmChoice().getSelectionModel().selectFirst();
-        view.getSeedField().clear();
+        view.getKeyField().clear();
         view.getStatusLabel().setText("");
-    }
-
-    private void showAlert(Alert.AlertType type, String title, String message) {
-        Alert alert = new Alert(type);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        alert.setContentText(message);
-        alert.showAndWait();
     }
 }
