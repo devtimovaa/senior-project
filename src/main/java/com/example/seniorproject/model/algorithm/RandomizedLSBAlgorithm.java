@@ -32,7 +32,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
         this.key = key;
     }
 
-    //Embeds secret data at shuffled byte positions so it is scattered across the image
+    //Embeds secret data at shuffled positions so it is scattered across the image
     @Override
     public BufferedImage embed(BufferedImage coverImage, byte[] secret) {
         byte[] payload = secret == null ? new byte[0] : secret;
@@ -67,7 +67,7 @@ public class RandomizedLSBAlgorithm implements SteganographyAlgorithm {
         return stegoImage;
     }
 
-    //Extracts hidden data by regenerating the same shuffled order from the key
+    //Extracts hidden data by finding the same shuffled order from the key
     @Override
     public byte[] extract(BufferedImage stegoImage) {
         List<Integer> order = getShuffledOrder(stegoImage);

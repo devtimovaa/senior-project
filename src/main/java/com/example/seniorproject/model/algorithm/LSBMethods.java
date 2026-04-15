@@ -59,7 +59,7 @@ class LSBMethods {
         image.setRGB(x, y, newPixel);
     }
 
-    //Deep copy of an image so the original stays untouched
+    //Copy of an image so the original stays untouched
     static BufferedImage copyImage(BufferedImage original) {
         int w = original.getWidth();
         int h = original.getHeight();
