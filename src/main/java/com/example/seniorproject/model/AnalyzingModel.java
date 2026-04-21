@@ -68,7 +68,7 @@ public class AnalyzingModel {
         return 10.0 * Math.log10(255.0 * 255.0 / mse);
     }
 
-    //Converts a byte count into a readable string (B, KB or MB)
+    //Converts a byte count into a readable string
     public String formatBytes(long bytes) {
         if (bytes < 1024) return bytes + " B";
         if (bytes < 1024 * 1024) return String.format("%.2f KB", bytes / 1024.0);

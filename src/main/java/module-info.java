@@ -1,6 +1,7 @@
 module com.example.seniorproject {
     requires javafx.controls;
     requires javafx.fxml;
+    requires transitive javafx.graphics;
     requires javafx.swing;
     requires transitive java.desktop;
 

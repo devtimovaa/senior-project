@@ -6,20 +6,21 @@ import com.example.seniorproject.model.algorithm.RandomizedLSBAlgorithm;
 
 import java.awt.image.BufferedImage;
 
+//Extraction to the chosen steganography algorithm
 public class ExtractingModel {
 
-    public byte[] extract(BufferedImage image, String algorithm, int seed) {
+    public byte[] extract(BufferedImage stegoImage, String algorithm, int key) {
         if ("LSB".equals(algorithm)) {
-            return new LSBAlgorithm().extract(image);
+            return new LSBAlgorithm().extract(stegoImage);
         } else if ("Randomized LSB".equals(algorithm)) {
-            return new RandomizedLSBAlgorithm(seed).extract(image);
+            return new RandomizedLSBAlgorithm(key).extract(stegoImage);
         } else if ("Josephus LSB 3-3-2".equals(algorithm)) {
-            return new JosephusLSB332Algorithm(seed).extract(image);
+            return new JosephusLSB332Algorithm(key).extract(stegoImage);
         }
-        return new byte[0];
+        throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
     }
 
-    // Detect if text or image was hidden
+    //Checks if the extracted bytes are a PNG file based on the magic header
     public static boolean isPngBytes(byte[] bytes) {
         if (bytes == null || bytes.length < 8) return false;
         return (bytes[0] & 0xFF) == 0x89

@@ -6,16 +6,17 @@ import com.example.seniorproject.model.algorithm.RandomizedLSBAlgorithm;
 
 import java.awt.image.BufferedImage;
 
+//Embedding to the chosen steganography algorithm
 public class EmbeddingModel {
 
-    public BufferedImage embed(BufferedImage coverImage, byte[] data, String algorithm, int seed) {
+    public BufferedImage embed(BufferedImage coverImage, byte[] secret, String algorithm, int key) {
         if ("LSB".equals(algorithm)) {
-            return new LSBAlgorithm().embed(coverImage, data);
+            return new LSBAlgorithm().embed(coverImage, secret);
         } else if ("Randomized LSB".equals(algorithm)) {
-            return new RandomizedLSBAlgorithm(seed).embed(coverImage, data);
+            return new RandomizedLSBAlgorithm(key).embed(coverImage, secret);
         } else if ("Josephus LSB 3-3-2".equals(algorithm)) {
-            return new JosephusLSB332Algorithm(seed).embed(coverImage, data);
+            return new JosephusLSB332Algorithm(key).embed(coverImage, secret);
         }
-        return coverImage;
+        throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
     }
 }

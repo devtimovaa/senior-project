@@ -43,7 +43,7 @@ public class RunProgram extends Application {
         tabPane.setTabClosingPolicy(TabPane.TabClosingPolicy.UNAVAILABLE);
 
 
-        primaryStage.setTitle("Steganography Application");
+        primaryStage.setTitle("LSB image steganography — hide & extract");
         primaryStage.setWidth(900);
         primaryStage.setHeight(900);
         primaryStage.setScene(new Scene(tabPane));
